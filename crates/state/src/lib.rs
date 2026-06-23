@@ -212,6 +212,7 @@ mod tests {
                 },
                 signature_type: SignatureType::Ed25519,
                 signature: vec![0; 64],
+                public_key: vec![0; 32],
             };
 
             let mut batch = StorageBatch::new();
@@ -257,6 +258,7 @@ mod tests {
                 },
                 signature_type: SignatureType::Ed25519,
                 signature: vec![0; 64],
+                public_key: vec![0; 32],
             };
 
             let mut batch = StorageBatch::new();
@@ -292,6 +294,7 @@ mod tests {
                 },
                 signature_type: SignatureType::Ed25519,
                 signature: vec![0; 64],
+                public_key: vec![0; 32],
             };
 
             let mut batch = StorageBatch::new();

@@ -79,6 +79,20 @@ impl Ed25519Verifier {
     }
 }
 
+/// Derives a 20-byte public key hash from a raw public key.
+/// Pipeline: PubKeyHash = RIPEMD160(SHA256(PublicKey))
+pub fn derive_pubkey_hash(public_key: &[u8]) -> [u8; 20] {
+    use sha2::Digest as _;
+    use ripemd::Digest as _;
+    let sha_digest = sha2::Sha256::digest(public_key);
+    let mut ripemd_hasher = ripemd::Ripemd160::new();
+    ripemd_hasher.update(&sha_digest);
+    let ripemd_digest = ripemd_hasher.finalize();
+    let mut out = [0u8; 20];
+    out.copy_from_slice(&ripemd_digest);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,5 +140,13 @@ mod tests {
         let invalid_message = b"consensus vote block 101";
         let result_invalid = Ed25519Verifier::verify(&pubkey, invalid_message, &signature);
         assert!(result_invalid.is_err());
+    }
+
+    #[test]
+    fn test_address_derivation() {
+        let pubkey = [0u8; 32];
+        let pkh = derive_pubkey_hash(&pubkey);
+        assert_eq!(pkh.len(), 20);
+        assert_ne!(pkh, [0u8; 20]);
     }
 }

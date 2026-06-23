@@ -13,6 +13,7 @@ const PREFIX_HEADER: u8 = b'h';
 const PREFIX_BODY: u8 = b'd';
 const PREFIX_TX_INDEX: u8 = b't';
 const PREFIX_HEIGHT_MAP: u8 = b'b';
+const PREFIX_META: u8 = b'm';
 
 /// Database storage error types.
 #[derive(Error, Debug)]
@@ -93,6 +94,13 @@ impl Storage {
         let mut key = [0u8; 9];
         key[0] = PREFIX_HEIGHT_MAP;
         key[1..9].copy_from_slice(&height.to_be_bytes());
+        key
+    }
+
+    fn meta_key(field: &[u8]) -> Vec<u8> {
+        let mut key = Vec::with_capacity(1 + field.len());
+        key.push(PREFIX_META);
+        key.extend_from_slice(field);
         key
     }
 
@@ -291,6 +299,75 @@ impl Storage {
             Some(bytes) => {
                 if bytes.len() != 32 {
                     return Err(StorageError::Format("Invalid block hash length".to_string()));
+                }
+                let mut hash_bytes = [0u8; 32];
+                hash_bytes.copy_from_slice(&bytes);
+                Ok(Some(Hash(hash_bytes)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Save the hash of the best block to storage.
+    pub fn put_best_block(&self, hash: &Hash) -> Result<(), StorageError> {
+        let key = Self::meta_key(b"best_block");
+        self.db.put(key, hash.0)?;
+        Ok(())
+    }
+
+    /// Read the hash of the best block from storage.
+    pub fn get_best_block(&self) -> Result<Option<Hash>, StorageError> {
+        let key = Self::meta_key(b"best_block");
+        match self.db.get(key)? {
+            Some(bytes) => {
+                if bytes.len() != 32 {
+                    return Err(StorageError::Format("Invalid hash length".to_string()));
+                }
+                let mut hash_bytes = [0u8; 32];
+                hash_bytes.copy_from_slice(&bytes);
+                Ok(Some(Hash(hash_bytes)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Save the current chain height to storage.
+    pub fn put_chain_height(&self, height: u64) -> Result<(), StorageError> {
+        let key = Self::meta_key(b"chain_height");
+        self.db.put(key, height.to_be_bytes())?;
+        Ok(())
+    }
+
+    /// Read the current chain height from storage.
+    pub fn get_chain_height(&self) -> Result<Option<u64>, StorageError> {
+        let key = Self::meta_key(b"chain_height");
+        match self.db.get(key)? {
+            Some(bytes) => {
+                if bytes.len() != 8 {
+                    return Err(StorageError::Format("Invalid height length".to_string()));
+                }
+                let mut height_bytes = [0u8; 8];
+                height_bytes.copy_from_slice(&bytes);
+                Ok(Some(u64::from_be_bytes(height_bytes)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Save the hash of the finalized block to storage.
+    pub fn put_finalized_block(&self, hash: &Hash) -> Result<(), StorageError> {
+        let key = Self::meta_key(b"finalized_block");
+        self.db.put(key, hash.0)?;
+        Ok(())
+    }
+
+    /// Read the hash of the finalized block from storage.
+    pub fn get_finalized_block(&self) -> Result<Option<Hash>, StorageError> {
+        let key = Self::meta_key(b"finalized_block");
+        match self.db.get(key)? {
+            Some(bytes) => {
+                if bytes.len() != 32 {
+                    return Err(StorageError::Format("Invalid hash length".to_string()));
                 }
                 let mut hash_bytes = [0u8; 32];
                 hash_bytes.copy_from_slice(&bytes);

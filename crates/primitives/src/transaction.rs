@@ -41,4 +41,6 @@ pub struct TransactionEnvelope {
     pub signature_type: SignatureType,
     /// Cryptographic signature bytes (64 bytes for Ed25519, 65 bytes for secp256k1).
     pub signature: Vec<u8>,
+    /// Cryptographic public key of the sender.
+    pub public_key: Vec<u8>,
 }
