@@ -53,6 +53,7 @@ impl Account {
 }
 
 /// Manages database reads/writes and ledger state transition rules.
+#[derive(Clone)]
 pub struct StateManager {
     storage: Storage,
 }

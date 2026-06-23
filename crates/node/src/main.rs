@@ -1,7 +1,7 @@
 //! ARUNA core node runner.
 //! Loads genesis configuration from toml file, initializes RocksDB storage, and verifies ledger state.
 
-use aruna_primitives::{Block, BlockBody, BlockHeader, Hash, Address, Nonce, Difficulty};
+use aruna_primitives::{Block, BlockBody, BlockHeader, Hash, Address, Difficulty};
 use aruna_storage::{Storage, StorageBatch};
 use aruna_state::StateManager;
 use aruna_consensus::ConsensusEngine;

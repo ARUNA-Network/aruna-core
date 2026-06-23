@@ -24,6 +24,6 @@ ed25519-dalek = { version = "2.1.0", features = ["rand_core"] }
 hex = "0.4.3"
 rocksdb = "0.22.0"
 serde = { version = "1.0", features = ["derive"] }
-rand_core = "0.6.4"
+rand_core = { version = "0.6.4", features = ["getrandom"] }
 thiserror = "2"
 toml = "0.8.8"
