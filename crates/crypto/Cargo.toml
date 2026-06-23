@@ -1,0 +1,12 @@
+[package]
+name = "aruna-crypto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aruna-primitives = { path = "../primitives" }
+blake3 = "1.5.0"
+aes = "0.8.3"
+argon2 = "0.5.3"
+ed25519-dalek = { version = "2.1.0", features = ["rand_core"] }
+k256 = { version = "0.13.3", features = ["ecdsa"] }
