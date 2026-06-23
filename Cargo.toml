@@ -6,6 +6,8 @@ members = [
     "crates/ahash",
     "crates/storage",
     "crates/state",
+    "crates/consensus",
+    "crates/node",
     "crates/testing"
 ]
 
