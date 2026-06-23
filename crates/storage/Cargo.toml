@@ -1,0 +1,11 @@
+[package]
+name = "aruna-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aruna-primitives = { path = "../primitives" }
+rocksdb = { workspace = true }
+thiserror = { workspace = true }
