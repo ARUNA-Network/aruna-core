@@ -1,5 +1,13 @@
 //! Cryptographic signatures and hashing primitives for ARUNA.
-//! Supported algorithms: BLAKE3, Ed25519, secp256k1, AES, and Argon2.
+//!
+//! Currently Implemented:
+//! - BLAKE3 (hashing)
+//! - Ed25519 (signatures)
+//!
+//! Planned:
+//! - Argon2 (mining memory expansion)
+//! - AES (mining mixing stage)
+//! - secp256k1 (EVM compatibility)
 
 use aruna_primitives::{Hash, BlockHeader, serialize};
 use ed25519_dalek::{SigningKey, VerifyingKey, Signature, Signer, Verifier};
