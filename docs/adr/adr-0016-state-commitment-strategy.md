@@ -1,4 +1,4 @@
-# ADR-0016: State Root Strategy
+# ADR-0016: State Commitment Strategy
 
 ## Status
 Proposed

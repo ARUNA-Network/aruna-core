@@ -377,6 +377,29 @@ impl Storage {
         }
     }
 
+    /// Save the chain ID to storage.
+    pub fn put_chain_id(&self, chain_id: u32) -> Result<(), StorageError> {
+        let key = Self::meta_key(b"chain_id");
+        self.db.put(key, chain_id.to_be_bytes())?;
+        Ok(())
+    }
+
+    /// Read the chain ID from storage.
+    pub fn get_chain_id(&self) -> Result<Option<u32>, StorageError> {
+        let key = Self::meta_key(b"chain_id");
+        match self.db.get(key)? {
+            Some(bytes) => {
+                if bytes.len() != 4 {
+                    return Err(StorageError::Format("Invalid chain_id length".to_string()));
+                }
+                let mut id_bytes = [0u8; 4];
+                id_bytes.copy_from_slice(&bytes);
+                Ok(Some(u32::from_be_bytes(id_bytes)))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Execute atomic batch updates.
     pub fn write_batch(&self, batch: StorageBatch) -> Result<(), StorageError> {
         self.db.write(batch.batch)?;

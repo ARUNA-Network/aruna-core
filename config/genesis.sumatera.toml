@@ -1,0 +1,15 @@
+# ARUNA Network Genesis configuration for Sumatera Testnet
+
+[genesis]
+version = 1
+timestamp = 1782252000
+difficulty = 504381424  # 0x1e0ffff0
+chain_id = 1
+
+[allocations]
+# Addresses mapped to initial balances in ARU (1 ARU = 1,000,000 micro-ARU)
+"sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqquggh0p" = 5000000
+"sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqquucj847" = 5000000
+"sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqp2e49c" = 5000000
+"sumc1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsq9lh6" = 50000000
+"sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqd6ksp9" = 15000000
