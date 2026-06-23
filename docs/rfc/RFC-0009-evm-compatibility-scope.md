@@ -1,5 +1,8 @@
 # RFC-0009: EVM Integration & Compatibility Scope
 
+## Status
+Accepted
+
 ## 1. Background
 This RFC outlines the scope of EVM compatibility in the ARUNA execution layer, focusing on tool integration, signature handling, and execution gas limits.
 

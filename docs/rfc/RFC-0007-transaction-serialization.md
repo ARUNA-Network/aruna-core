@@ -1,5 +1,8 @@
 # RFC-0007: Transaction Serialization & Layouts
 
+## Status
+Accepted
+
 ## 1. Background
 To ensure transaction propagation determinism, this RFC specifies the Bincode serialization configuration and binary field layouts for transaction envelopes.
 

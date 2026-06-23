@@ -1,5 +1,8 @@
 # RFC-0006: Validator Weight Concentration Limits
 
+## Status
+Accepted
+
 ## 1. Background
 To prevent plutocratic validator coalitions and ensure validation decentralization, this RFC proposes a mechanism to cap individual validator voting and reward weight.
 

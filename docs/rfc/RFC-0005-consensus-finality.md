@@ -1,5 +1,8 @@
 # RFC-0005: Consensus Finality & Checkpoint Agreement
 
+## Status
+Accepted
+
 ## 1. Background
 This RFC outlines the finality checkpoint model, validator consensus votes, and chain reorganization limits.
 

@@ -1,5 +1,8 @@
 # RFC-0002: AHash Difficulty Adjustment Model
 
+## Status
+Accepted
+
 ## 1. Background
 To maintain a stable block time of 30 seconds under fluctuating miner participation, the mining difficulty target must adapt dynamically. This RFC defines the difficulty adjustment algorithm parameters for the AHash proof-of-work mechanism.
 

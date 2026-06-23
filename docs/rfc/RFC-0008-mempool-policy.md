@@ -1,5 +1,8 @@
 # RFC-0008: Mempool Admission & Eviction Policies
 
+## Status
+Accepted
+
 ## 1. Background
 The local node mempool stores pending transactions. This RFC defines the mempool capacity limits, prioritization algorithms, replace-by-fee rules, and transaction expiration bounds.
 

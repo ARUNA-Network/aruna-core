@@ -1,5 +1,8 @@
 # RFC-0010: Staking Parameters & Validator Penalty Rules
 
+## Status
+Accepted
+
 ## 1. Background
 This RFC specifies the staking thresholds, delegator commissions, and validator offline penalty rules.
 

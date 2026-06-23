@@ -1,5 +1,8 @@
 # RFC-0003: Block Reward Schedule & Supply Distribution
 
+## Status
+Accepted
+
 ## 1. Background
 This RFC outlines the disinflationary emission schedule and genesis distribution details to enforce the 1,000,000,000 ARU total supply cap.
 

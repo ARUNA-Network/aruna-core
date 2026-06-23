@@ -1,5 +1,8 @@
 # RFC-0004: Address Format & Checksum Specifications
 
+## Status
+Accepted
+
 ## 1. Background
 Addresses represent public keys. This RFC specifies the hashing, encoding, network separator formats, and error-correction checksum details.
 

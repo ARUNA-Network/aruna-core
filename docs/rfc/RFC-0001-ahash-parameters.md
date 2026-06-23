@@ -1,5 +1,8 @@
 # RFC-0001: AHash v1 Mining Algorithm Parameters
 
+## Status
+Accepted
+
 ## 1. Background
 According to [ADR-0009](file:///home/coleallstar/Public/crypto-project/docs/adr/adr-0009-ahash-mining-algorithm.md), ARUNA Network utilizes a custom CPU-focused hashing pipeline named **AHash Specification v1** to support energy-efficient mining on commodity hardware (Android phones, Raspberry Pi, Mini PCs, and low-cost x86 CPUs).
 
