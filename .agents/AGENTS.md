@@ -200,6 +200,7 @@ No implementation without documentation. Every significant change requires:
 ## ADR Enforcement Policy
 * **AI Enforcement:** Before generating code, AI agents must read relevant ADRs, verify implementation matches the ADR, report conflicts, and refuse any implementation that violates accepted ADRs.
 * **Priority Hierarchy:** ADR > Rules > Code. If a conflict occurs, execution must STOP immediately to explain the conflict and propose alternatives.
+* **ADR Authority:** Architecture Decision Records (ADR) are the highest technical authority. Before making architectural decisions, agents must search ADRs, identify applicable ADRs, verify compatibility, and cite the ADRs used. Never silently override an accepted ADR. If an ADR conflict exists, stop implementation, explain the conflict, and suggest a migration path. No protocol code may violate accepted ADRs.
 
 ---
 
