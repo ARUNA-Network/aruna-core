@@ -195,6 +195,11 @@ No implementation without documentation. Every significant change requires:
 * Technical Notes
 * Architecture Notes
 * Security Notes
+---
+
+## ADR Enforcement Policy
+* **AI Enforcement:** Before generating code, AI agents must read relevant ADRs, verify implementation matches the ADR, report conflicts, and refuse any implementation that violates accepted ADRs.
+* **Priority Hierarchy:** ADR > Rules > Code. If a conflict occurs, execution must STOP immediately to explain the conflict and propose alternatives.
 
 ---
 
