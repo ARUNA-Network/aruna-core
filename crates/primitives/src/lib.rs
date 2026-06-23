@@ -9,6 +9,8 @@ pub mod nonce;
 pub mod difficulty;
 pub mod block;
 pub mod transaction;
+pub mod errors;
+pub mod serialization;
 
 pub use hash::Hash;
 pub use address::Address;
@@ -17,22 +19,10 @@ pub use nonce::Nonce;
 pub use difficulty::Difficulty;
 pub use block::{Block, BlockBody, BlockHeader};
 pub use transaction::{SignatureType, TransactionEnvelope, TransactionPayload};
+pub use errors::PrimitiveError;
+pub use serialization::{bincode_options, serialize, deserialize};
 
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
-
-/// Error type for ARUNA primitive conversions.
-#[derive(Error, Debug, Clone, PartialEq, Eq)]
-pub enum PrimitiveError {
-    #[error("Invalid hex string: {0}")]
-    InvalidHex(#[from] hex::FromHexError),
-    #[error("Invalid slice length: expected {expected}, got {got}")]
-    InvalidLength { expected: usize, got: usize },
-    #[error("Bech32m error: {0}")]
-    Bech32m(#[from] bech32m::Bech32mError),
-    #[error("Address format error: {0}")]
-    AddressFormat(String),
-}
 
 /// Initial handshake message exchanged between P2P nodes.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,25 +57,6 @@ pub struct SyncResponseMessage {
     pub status: u8,
     /// List of serialized blocks.
     pub blocks: Vec<Block>,
-}
-
-/// Retrieve standard Bincode options matching ARUNA Network's serialization rules
-/// (Big Endian byte order and fixed-width integer encoding).
-pub fn bincode_options() -> impl bincode::Options {
-    use bincode::Options;
-    bincode::options()
-        .with_big_endian()
-        .with_fixint_encoding()
-}
-
-/// Serialize a type into big-endian fixed-integer Bincode bytes.
-pub fn serialize<T: Serialize>(value: &T) -> Result<Vec<u8>, bincode::Error> {
-    bincode_options().serialize(value)
-}
-
-/// Deserialize big-endian fixed-integer Bincode bytes back into a Rust type.
-pub fn deserialize<'a, T: Deserialize<'a>>(bytes: &'a [u8]) -> Result<T, bincode::Error> {
-    bincode_options().deserialize(bytes)
 }
 
 #[cfg(test)]
