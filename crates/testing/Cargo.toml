@@ -1,5 +1,5 @@
 [package]
-name = "aruna-crypto"
+name = "aruna-testing"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,10 +7,7 @@ repository.workspace = true
 
 [dependencies]
 aruna-primitives = { path = "../primitives" }
-blake3 = { workspace = true }
-ed25519-dalek = { workspace = true }
+aruna-crypto = { path = "../crypto" }
+aruna-ahash = { path = "../ahash" }
 serde = { workspace = true }
 thiserror = { workspace = true }
-aes = "0.8.3"
-argon2 = "0.5.3"
-k256 = { version = "0.13.3", features = ["ecdsa"] }

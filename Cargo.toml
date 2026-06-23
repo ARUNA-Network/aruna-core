@@ -1,8 +1,20 @@
 [workspace]
 resolver = "2"
-
 members = [
     "crates/primitives",
     "crates/crypto",
-    "crates/ahash"
+    "crates/ahash",
+    "crates/testing"
 ]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ARUNA-Network/aruna-core"
+
+[workspace.dependencies]
+blake3 = "1"
+ed25519-dalek = { version = "2.1.0", features = ["rand_core"] }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2"
