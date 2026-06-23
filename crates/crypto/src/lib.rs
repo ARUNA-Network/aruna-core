@@ -80,16 +80,11 @@ impl Ed25519Verifier {
 }
 
 /// Derives a 20-byte public key hash from a raw public key.
-/// Pipeline: PubKeyHash = RIPEMD160(SHA256(PublicKey))
+/// Pipeline: PubKeyHash = BLAKE3(PublicKey)[0..20]
 pub fn derive_pubkey_hash(public_key: &[u8]) -> [u8; 20] {
-    use sha2::Digest as _;
-    use ripemd::Digest as _;
-    let sha_digest = sha2::Sha256::digest(public_key);
-    let mut ripemd_hasher = ripemd::Ripemd160::new();
-    ripemd_hasher.update(&sha_digest);
-    let ripemd_digest = ripemd_hasher.finalize();
+    let hash = blake3::hash(public_key);
     let mut out = [0u8; 20];
-    out.copy_from_slice(&ripemd_digest);
+    out.copy_from_slice(&hash.as_bytes()[0..20]);
     out
 }
 

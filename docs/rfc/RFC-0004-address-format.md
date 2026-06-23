@@ -11,7 +11,7 @@ Addresses represent public keys. This RFC specifies the hashing, encoding, netwo
 ### A. Key Derivation Flow
 * **Input:** Raw Public Key (Ed25519 or secp256k1).
 * **Hash:**
-  $$\text{PubKeyHash} = \text{RIPEMD160}(\text{SHA256}(\text{PublicKey}))$$
+  $$\text{PubKeyHash} = \text{BLAKE3}(\text{PublicKey})[0..20]$$
 * **Length:** 20 bytes.
 
 ### B. Bech32m base32 Encoding

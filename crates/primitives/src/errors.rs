@@ -2,7 +2,7 @@ use thiserror::Error;
 use crate::bech32m;
 
 /// Error type for ARUNA primitive conversions.
-#[derive(Error, Debug, Clone, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum PrimitiveError {
     #[error("Invalid hex string: {0}")]
     InvalidHex(#[from] hex::FromHexError),

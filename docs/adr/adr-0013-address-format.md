@@ -41,8 +41,8 @@ To distinguish smart contracts from standard user wallets, we insert `c1` as the
 
 ### Address Derivation Formula:
 1. Generate the public key (using Ed25519 or secp256k1).
-2. Calculate the 160-bit hash of the public key:
-   `PublicKeyHash = RIPEMD160(SHA256(PublicKey))`
+2. Calculate the 160-bit hash of the public key by taking the first 20 bytes of its BLAKE3 hash:
+   `PublicKeyHash = BLAKE3(PublicKey)[0..20]`
 3. Encode the `PublicKeyHash` using the Bech32m base32 character set, appending the 6-character error-detection checksum.
 4. Prepend the corresponding network prefix (e.g., `jaw1` or `jawc1`).
 

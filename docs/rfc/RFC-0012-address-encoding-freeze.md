@@ -23,7 +23,7 @@ The separator character between the HRP and data parts is fixed as `1`.
 
 ### B. Payload Structure and Checksum
 * **Payload Length:** The encoded data payload represents the 20-byte `PublicKeyHash` calculated via:
-  $$\text{PublicKeyHash} = \text{RIPEMD160}(\text{SHA256}(\text{PublicKey}))$$
+  $$\text{PublicKeyHash} = \text{BLAKE3}(\text{PublicKey})[0..20]$$
 * **Padding Constraint:** The 20-byte payload is expanded to 5-bit base32 groups. For transaction payloads and EVM compatibility, this 20-byte hash is left-padded with zero bytes into a 32-byte field (bytes `0..12` are set to `0`, bytes `12..32` contain the hash).
 * **Checksum Algorithm:** Enforced as BIP-350 Bech32m utilizing the polymod constant `0x2bc830f3`.
 

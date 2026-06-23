@@ -16,11 +16,9 @@ ARUNA uses distinct Human Readable Parts (HRP) in its addresses to enforce separ
 ## 2. Derivation & Hashing Pipeline
 Addresses represent public key hashes. The derivation path proceeds as follows:
 1. **Key Generation:** A standard BIP32/44 wallet derives a private key and its corresponding public key (Ed25519 or secp256k1).
-2. **First Hash:** Compute the SHA-256 digest of the serialized public key:
-   `H1 = SHA256(PublicKey)`
-3. **Second Hash:** Compute the RIPEMD-160 digest of `H1`:
-   `PublicKeyHash = RIPEMD160(H1)` (resulting in a **20-byte digest**).
-4. **Bech32m Encoding:** Encode the 20-byte `PublicKeyHash` using the Bech32m base32 character set, appending a checksum.
+2. **Hash Computation:** Compute the BLAKE3 digest of the serialized public key and extract the first 20 bytes:
+   `PublicKeyHash = BLAKE3(PublicKey)[0..20]` (resulting in a **20-byte digest**).
+3. **Bech32m Encoding:** Encode the 20-byte `PublicKeyHash` using the Bech32m base32 character set, appending a checksum.
 
 ## 3. Bech32m Encoding Specification
 * **Standard:** BIP-350 (Bech32m). The older BIP-173 (Bech32) standard is avoided due to the "length-extension" vulnerability in 0-value address checking.

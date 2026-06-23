@@ -3,7 +3,7 @@ use std::fmt;
 use crate::{bech32m, PrimitiveError};
 
 /// A 32-byte account address.
-/// Internally wraps a 32-byte array. Standard 20-byte public key hashes (RIPEMD160(SHA256(PubKey)))
+/// Internally wraps a 32-byte array. Standard 20-byte public key hashes (BLAKE3(PubKey)[0..20])
 /// are left-padded with zeros (stored in the last 20 bytes: 12..32) for EVM compatibility.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Address(pub [u8; 32]);

@@ -1,3 +1,4 @@
+use bincode::Options;
 use serde::{Deserialize, Serialize};
 
 /// Retrieve standard Bincode options matching ARUNA Network's serialization rules
