@@ -55,6 +55,79 @@ async fn get_status(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        let subcommand = &args[1];
+        let db_path = Path::new("./data_sumatera");
+        
+        // Try to open the database in read-only mode
+        let storage = match Storage::open_read_only(db_path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error opening database in read-only mode: {:?}", e);
+                eprintln!("Please ensure the node has been started at least once to initialize the database.");
+                std::process::exit(1);
+            }
+        };
+
+        match subcommand.as_str() {
+            "status" => {
+                let height = storage.get_chain_height()?.unwrap_or(0);
+                let tip_hash = storage.get_best_block()?
+                    .map(|h| h.to_string())
+                    .unwrap_or_else(|| "none".to_string());
+                
+                println!("{{\"height\":{},\"tip\":\"{}\"}}", height, tip_hash);
+                return Ok(());
+            }
+            "block" => {
+                if args.len() < 3 {
+                    eprintln!("Error: Missing block height. Usage: aruna-node block <height>");
+                    std::process::exit(1);
+                }
+                let height_str = &args[2];
+                let height = match height_str.parse::<u64>() {
+                    Ok(h) => h,
+                    Err(_) => {
+                        eprintln!("Error: Invalid block height '{}'. Must be a non-negative integer.", height_str);
+                        std::process::exit(1);
+                    }
+                };
+
+                match storage.get_block_hash_by_height(height)? {
+                    Some(hash) => {
+                        println!("{{\"height\":{},\"hash\":\"{}\"}}", height, hash);
+                        return Ok(());
+                    }
+                    None => {
+                        eprintln!("Error: Block not found at height {}", height);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            "blocks" => {
+                let height = storage.get_chain_height()?.unwrap_or(0);
+                for h in 1..=height {
+                    println!("{}", h);
+                }
+                return Ok(());
+            }
+            "help" | "-h" | "--help" => {
+                println!("ARUNA Chain Inspection CLI");
+                println!("Usage:");
+                println!("  aruna-node status        Display current chain height and tip block hash");
+                println!("  aruna-node block <h>     Display the block hash at height <h>");
+                println!("  aruna-node blocks        List all block heights from 1 to the current tip");
+                println!("  aruna-node               Start the full node daemon (default)");
+                return Ok(());
+            }
+            other => {
+                eprintln!("Error: Unknown subcommand '{}'. Run with 'help' for usage.", other);
+                std::process::exit(1);
+            }
+        }
+    }
+
     println!("ARUNA Core Node starting...");
 
     // 1. Load genesis configuration from TOML file

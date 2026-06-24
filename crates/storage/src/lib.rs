@@ -45,6 +45,17 @@ impl Storage {
         Ok(Self { db: Arc::new(db) })
     }
 
+    /// Open a RocksDB store in read-only mode, permitting concurrent reads while another process holds the write lock.
+    pub fn open_read_only(path: &Path) -> Result<Self, StorageError> {
+        let mut opts = rocksdb::Options::default();
+        // Optimize RocksDB for low-memory environments like ARM/Raspberry Pi
+        opts.increase_parallelism(2);
+        opts.set_max_background_jobs(2);
+
+        let db = rocksdb::DB::open_for_read_only(&opts, path, false)?;
+        Ok(Self { db: Arc::new(db) })
+    }
+
     // --- Key Generators ---
 
     fn account_key(address: &Address) -> [u8; 33] {

@@ -38,18 +38,18 @@ jobs:
       - name: Verify First Startup & Block Production Log
         run: |
           cat node_startup.log
-          grep "Initializing new ledger state from genesis config" node_startup.log
-          grep "ARUNA Node Started" node_startup.log
-          grep "Genesis : Loaded" node_startup.log
-          grep "Storage : Opened" node_startup.log
-          grep "State   : Initialized" node_startup.log
-          grep "Block #1 produced" node_startup.log
-          grep "Block #2 produced" node_startup.log
-          grep "Block #3 produced" node_startup.log
-          grep "Height: 1" node_startup.log
-          grep "Height: 2" node_startup.log
-          grep "Height: 3" node_startup.log
-          grep "Height=3" node_startup.log
+          grep -q "Initializing new ledger state from genesis config" node_startup.log
+          grep -q "ARUNA Node Started" node_startup.log
+          grep -q "Genesis : Loaded" node_startup.log
+          grep -q "Storage : Opened" node_startup.log
+          grep -q "State   : Initialized" node_startup.log
+          grep -q "Block #1 produced" node_startup.log
+          grep -q "Block #2 produced" node_startup.log
+          grep -q "Block #3 produced" node_startup.log
+          grep -q "Height: 1" node_startup.log
+          grep -q "Height: 2" node_startup.log
+          grep -q "Height: 3" node_startup.log
+          grep -q "Height=3" node_startup.log
 
       - name: Verify RocksDB Database Created
         run: |
@@ -79,13 +79,38 @@ jobs:
       - name: Verify Recovery & Persistence Log
         run: |
           cat node_recovery.log
-          grep "Genesis already initialized. Loading existing ledger state" node_recovery.log
-          grep "Block #4 produced" node_recovery.log
-          grep "Block #5 produced" node_recovery.log
-          grep "Block #6 produced" node_recovery.log
-          grep "Height: 4" node_recovery.log
-          grep "Height: 5" node_recovery.log
-          grep "Height: 6" node_recovery.log
-          grep "Height=6" node_recovery.log
-          ! grep "Initializing new ledger state from genesis config" node_recovery.log
+          grep -q "Genesis already initialized. Loading existing ledger state" node_recovery.log
+          grep -q "Block #4 produced" node_recovery.log
+          grep -q "Block #5 produced" node_recovery.log
+          grep -q "Block #6 produced" node_recovery.log
+          grep -q "Height: 4" node_recovery.log
+          grep -q "Height: 5" node_recovery.log
+          grep -q "Height: 6" node_recovery.log
+          grep -q "Height=6" node_recovery.log
+          ! grep -q "Initializing new ledger state from genesis config" node_recovery.log
+
+      - name: Verify CLI Chain Inspection
+        run: |
+          echo "Testing aruna-node status command..."
+          cargo run -p aruna-node -- status > cli_status.json
+          cat cli_status.json
+          grep -q '"height":6' cli_status.json
+          grep -q '"tip":' cli_status.json
+          
+          echo "Testing aruna-node blocks command..."
+          cargo run -p aruna-node -- blocks > cli_blocks.txt
+          cat cli_blocks.txt
+          [ "$(cat cli_blocks.txt | xargs)" = "1 2 3 4 5 6" ]
+          
+          echo "Testing aruna-node block 3 command..."
+          cargo run -p aruna-node -- block 3 > cli_block_3.json
+          cat cli_block_3.json
+          grep -q '"height":3' cli_block_3.json
+          grep -q '"hash":' cli_block_3.json
+          
+          echo "Testing aruna-node block 6 command..."
+          cargo run -p aruna-node -- block 6 > cli_block_6.json
+          cat cli_block_6.json
+          grep -q '"height":6' cli_block_6.json
+          grep -q '"hash":' cli_block_6.json
 
