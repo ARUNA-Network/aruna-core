@@ -129,3 +129,40 @@ jobs:
           grep -q '"height":6' cli_block_6.json
           grep -q '"hash":' cli_block_6.json
 
+      - name: Run Local Two-Node Synchronization Check
+        run: |
+          echo "Starting Node A on P2P port 9000, RPC port 8080..."
+          cargo run -p aruna-node -- --p2p-port 9000 --rpc-port 8080 > node_a.log 2>&1 &
+          NODE_A_PID=$!
+          
+          # Wait 5 seconds for Node A to bind and listen
+          sleep 5
+          
+          echo "Starting Node B (fresh sync node) on P2P port 9001, RPC port 8081, connecting to Node A..."
+          # Clean data directory for Node B to ensure a clean sync test
+          rm -rf ./data_sumatera_9001
+          cargo run -p aruna-node -- --p2p-port 9001 --rpc-port 8081 --peer 127.0.0.1:9000 > node_b.log 2>&1 &
+          NODE_B_PID=$!
+          
+          # Wait 15 seconds for Node B to handshake, request sync, process blocks, and commit
+          sleep 15
+          
+          echo "Querying Node B RPC status..."
+          curl -s http://127.0.0.1:8081/status > node_b_status.json
+          cat node_b_status.json
+          
+          # Assert that Node B successfully synchronized up to height 6
+          grep -q '"height":6' node_b_status.json
+          
+          # Terminate both nodes gracefully
+          kill $NODE_A_PID $NODE_B_PID || true
+          wait $NODE_A_PID $NODE_B_PID || true
+          
+          echo "Verifying Node B synchronization logs..."
+          cat node_b.log
+          grep -q "P2P Handshake successful with peer 127.0.0.1:9000" node_b.log
+          grep -q "Synced and committed Block #4" node_b.log
+          grep -q "Synced and committed Block #5" node_b.log
+          grep -q "Synced and committed Block #6" node_b.log
+          grep -q "Synchronization complete" node_b.log
+

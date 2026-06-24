@@ -1,0 +1,319 @@
+//! Asynchronous P2P networking and block synchronization layer for the ARUNA Network.
+//! Uses a lightweight length-prefixed TCP protocol to exchange handshake, synchronization, and block broadcast messages.
+
+use aruna_primitives::{Address, Hash, Block, HandshakeMessage, SyncRequestMessage, SyncResponseMessage, ChainId};
+use aruna_storage::Storage;
+use aruna_consensus::ConsensusEngine;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::mpsc;
+use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
+
+/// A network message wrapper for length-prefixed P2P transmission.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub enum P2PMessage {
+    Handshake(HandshakeMessage),
+    SyncRequest(SyncRequestMessage),
+    SyncResponse(SyncResponseMessage),
+    BlockBroadcast(Block),
+}
+
+/// Helper function to write a length-prefixed P2PMessage over an asynchronous writer.
+pub async fn write_msg<W>(stream: &mut W, msg: &P2PMessage) -> Result<(), std::io::Error>
+where
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    let bytes = bincode::serialize(msg)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let len = bytes.len() as u32;
+    
+    stream.write_all(&len.to_be_bytes()).await?;
+    stream.write_all(&bytes).await?;
+    Ok(())
+}
+
+/// Helper function to read a length-prefixed P2PMessage from an asynchronous reader.
+pub async fn read_msg<R>(stream: &mut R) -> Result<P2PMessage, std::io::Error>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let mut len_bytes = [0u8; 4];
+    stream.read_exact(&mut len_bytes).await?;
+    let len = u32::from_be_bytes(len_bytes) as usize;
+    
+    let mut buf = vec![0u8; len];
+    stream.read_exact(&mut buf).await?;
+    
+    let msg = bincode::deserialize(&buf)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    Ok(msg)
+}
+
+/// Thread-safe manager coordinating peers, block gossip, and synchronization.
+pub struct P2PManager {
+    storage: Storage,
+    consensus: ConsensusEngine,
+    p2p_port: u16,
+    chain_id: u32,
+    peer_writers: Arc<Mutex<Vec<mpsc::UnboundedSender<P2PMessage>>>>,
+}
+
+impl P2PManager {
+    /// Create a new P2PManager instance.
+    pub fn new(storage: Storage, consensus: ConsensusEngine, p2p_port: u16, chain_id: u32) -> Self {
+        Self {
+            storage,
+            consensus,
+            p2p_port,
+            chain_id,
+            peer_writers: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    /// Broadcast a block to all active connected peers.
+    pub fn broadcast_block(&self, block: &Block) {
+        let msg = P2PMessage::BlockBroadcast(block.clone());
+        let writers = self.peer_writers.lock().unwrap();
+        for tx in writers.iter() {
+            let _ = tx.send(msg.clone());
+        }
+    }
+
+    /// Starts the P2P server to listen for incoming connections.
+    pub fn start_server(self: Arc<Self>) {
+        let manager = self.clone();
+        tokio::spawn(async move {
+            let addr = format!("0.0.0.0:{}", manager.p2p_port);
+            let listener = match TcpListener::bind(&addr).await {
+                Ok(l) => {
+                    println!("P2P server successfully listening on P2P port {}", manager.p2p_port);
+                    l
+                }
+                Err(e) => {
+                    eprintln!("Error binding P2P server to port {}: {:?}", manager.p2p_port, e);
+                    return;
+                }
+            };
+
+            loop {
+                match listener.accept().await {
+                    Ok((stream, peer_addr)) => {
+                        let m = manager.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = m.handle_connection(stream, peer_addr, false).await {
+                                eprintln!("P2P connection error with peer {}: {:?}", peer_addr, e);
+                            }
+                        });
+                    }
+                    Err(e) => eprintln!("P2P server accept error: {:?}", e),
+                }
+            }
+        });
+    }
+
+    /// Actively connect to a bootstrap peer.
+    pub fn connect_to_peer(self: Arc<Self>, peer_addr: SocketAddr) {
+        let manager = self.clone();
+        tokio::spawn(async move {
+            println!("Actively connecting to peer: {}", peer_addr);
+            match TcpStream::connect(peer_addr).await {
+                Ok(stream) => {
+                    if let Err(e) = manager.handle_connection(stream, peer_addr, true).await {
+                        eprintln!("P2P connection error with peer {}: {:?}", peer_addr, e);
+                    }
+                }
+                Err(e) => eprintln!("Failed to connect to peer {}: {:?}", peer_addr, e),
+            }
+        });
+    }
+
+    /// Handles a single peer connection (both inbound and outbound).
+    /// Orchestrates handshakes, sync requests, sync responses, and gossip broadcasts.
+    async fn handle_connection(
+        &self,
+        stream: TcpStream,
+        peer_addr: SocketAddr,
+        _is_outbound: bool,
+    ) -> Result<(), std::io::Error> {
+        let (mut reader, mut writer) = stream.into_split();
+        let (tx, mut rx) = mpsc::unbounded_channel::<P2PMessage>();
+
+        // Spawn a background task to handle outbound writes to the peer
+        let writer_task = tokio::spawn(async move {
+            while let Some(msg) = rx.recv().await {
+                if let Err(e) = write_msg(&mut writer, &msg).await {
+                    eprintln!("Failed to write P2P message: {:?}", e);
+                    break;
+                }
+            }
+        });
+
+        // 1. Perform P2P Handshake immediately
+        let our_height = self.storage.get_chain_height().unwrap_or(Some(0)).unwrap_or(0);
+        let our_handshake = HandshakeMessage {
+            version: 1,
+            node_id: [0u8; 32], // dummy node ID
+            chain_id: ChainId(self.chain_id),
+            current_height: our_height,
+            capabilities: 1, // FULL_NODE
+        };
+
+        // Send our handshake via the channel
+        tx.send(P2PMessage::Handshake(our_handshake))
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::WriteZero, e.to_string()))?;
+
+        // Read peer handshake
+        let msg = read_msg(&mut reader).await?;
+        let peer_handshake = match msg {
+            P2PMessage::Handshake(h) => h,
+            other => {
+                writer_task.abort();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Expected Handshake message, got: {:?}", other),
+                ));
+            }
+        };
+
+        // Validate Chain ID alignment
+        if peer_handshake.chain_id.0 != self.chain_id {
+            writer_task.abort();
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                format!("Chain ID mismatch: expected {}, got {}", self.chain_id, peer_handshake.chain_id.0),
+            ));
+        }
+
+        println!(
+            "P2P Handshake successful with peer {}. Peer height: {}. Our height: {}",
+            peer_addr, peer_handshake.current_height, our_height
+        );
+
+        // Add peer to writer registry
+        {
+            let mut writers = self.peer_writers.lock().unwrap();
+            writers.push(tx.clone());
+        }
+
+        // 2. Synchronization check
+        // If peer height is greater than ours, initiate a SyncRequest to catch up
+        if peer_handshake.current_height > our_height {
+            let start = our_height + 1;
+            let end = peer_handshake.current_height;
+            println!("Initiating sync request for blocks {} to {} from peer {}", start, end, peer_addr);
+            
+            let sync_req = SyncRequestMessage {
+                start_height: start,
+                end_height: end,
+                block_limit: 500,
+            };
+            tx.send(P2PMessage::SyncRequest(sync_req))
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::WriteZero, e.to_string()))?;
+        }
+
+        // 3. Main P2P message processing loop
+        loop {
+            match read_msg(&mut reader).await {
+                Ok(p2p_msg) => match p2p_msg {
+                    P2PMessage::Handshake(_) => {
+                        eprintln!("Unexpected duplicate handshake from peer {}", peer_addr);
+                    }
+                    P2PMessage::SyncRequest(req) => {
+                        // Peer is requesting blocks. Retrieve them from storage and send response.
+                        println!("Received block sync request from peer {} for blocks {} to {}", peer_addr, req.start_height, req.end_height);
+                        let mut blocks = Vec::new();
+                        let mut status = 0; // Success
+
+                        for h in req.start_height..=req.end_height {
+                            match self.storage.get_block_hash_by_height(h) {
+                                Ok(Some(hash)) => {
+                                    let header_opt = self.storage.get_block_header(&hash).unwrap_or(None);
+                                    let body_opt = self.storage.get_block_body(&hash).unwrap_or(None);
+                                    if let (Some(header), Some(body)) = (header_opt, body_opt) {
+                                        blocks.push(Block { header, body });
+                                    } else {
+                                        status = 2; // Internal Error (data missing)
+                                        break;
+                                    }
+                                }
+                                Ok(None) => {
+                                    status = 1; // Out of Range
+                                    break;
+                                }
+                                Err(_) => {
+                                    status = 2; // Internal Error
+                                    break;
+                                }
+                            }
+                        }
+
+                        let response = SyncResponseMessage { status, blocks };
+                        tx.send(P2PMessage::SyncResponse(response))
+                            .map_err(|e| std::io::Error::new(std::io::ErrorKind::WriteZero, e.to_string()))?;
+                    }
+                    P2PMessage::SyncResponse(res) => {
+                        // Received block sync response. Validate and commit blocks sequentially.
+                        if res.status == 0 {
+                            println!("Received {} blocks from peer {}. Processing sync...", res.blocks.len(), peer_addr);
+                            for block in res.blocks {
+                                // Validate block (consensus signature & state rules)
+                                if let Err(e) = self.consensus.validate_block(&block) {
+                                    eprintln!("Sync block validation failed for height {}: {:?}", block.header.timestamp, e);
+                                    break;
+                                }
+                                // Commit block to database
+                                match self.consensus.commit_block(&block) {
+                                    Ok(hash) => {
+                                        let h = self.storage.get_chain_height().unwrap_or(Some(0)).unwrap_or(0);
+                                        println!("Synced and committed Block #{} | Hash: {}", h, hash);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Sync block commit failed: {:?}", e);
+                                        break;
+                                    }
+                                }
+                            }
+                            println!("Synchronization complete. Current height: {}", self.storage.get_chain_height().unwrap_or(Some(0)).unwrap_or(0));
+                        } else {
+                            eprintln!("Peer {} returned sync error status: {}", peer_addr, res.status);
+                        }
+                    }
+                    P2PMessage::BlockBroadcast(block) => {
+                        // Received block broadcast (gossip) from peer.
+                        if let Err(e) = self.consensus.validate_block(&block) {
+                            eprintln!("Broadcasted block validation failed from peer {}: {:?}", peer_addr, e);
+                        } else {
+                            match self.consensus.commit_block(&block) {
+                                Ok(hash) => {
+                                    let h = self.storage.get_chain_height().unwrap_or(Some(0)).unwrap_or(0);
+                                    println!("Synced and committed Block #{} | Hash: {}", h, hash);
+                                }
+                                Err(e) => {
+                                    eprintln!("Broadcasted block commit failed: {:?}", e);
+                                }
+                            }
+                        }
+                    }
+                },
+                Err(e) => {
+                    if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                        println!("Peer {} disconnected gracefully", peer_addr);
+                    } else {
+                        eprintln!("Error reading P2P message from peer {}: {:?}", peer_addr, e);
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Clean up peer writer registration
+        {
+            let mut writers = self.peer_writers.lock().unwrap();
+            writers.retain(|w| !w.same_channel(&tx));
+        }
+
+        writer_task.abort();
+        Ok(())
+    }
+}

@@ -9,7 +9,8 @@ members = [
     "crates/consensus",
     "crates/node",
     "crates/testing",
-    "crates/mempool"
+    "crates/mempool",
+    "crates/networking"
 ]
 
 [workspace.package]

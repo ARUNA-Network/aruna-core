@@ -104,14 +104,14 @@ impl ConsensusEngine {
         let mut batch = StorageBatch::new();
 
         // 3. Keep a cache of modified accounts to prevent overwriting updates
-        let mut account_cache = std::collections::HashMap::new();
+        let mut account_cache: std::collections::HashMap<Address, aruna_state::Account> = std::collections::HashMap::new();
 
-        // Local closure to get account from cache or database
-        let mut get_account_local = |addr: &Address| -> Result<aruna_state::Account, ConsensusError> {
-            if let Some(acc) = account_cache.get(addr) {
+        // Local helper closure to get account from cache or database (without capturing to satisfy borrow checker)
+        let get_account_local = |addr: &Address, cache: &std::collections::HashMap<Address, aruna_state::Account>, state_mgr: &StateManager| -> Result<aruna_state::Account, ConsensusError> {
+            if let Some(acc) = cache.get(addr) {
                 Ok(acc.clone())
             } else {
-                let acc = self.state_manager.get_account(addr)?
+                let acc = state_mgr.get_account(addr)?
                     .unwrap_or_else(|| aruna_state::Account::new(0, aruna_primitives::Nonce::zero()));
                 Ok(acc)
             }
@@ -122,8 +122,8 @@ impl ConsensusEngine {
             let sender_addr = tx.payload.sender;
             let recipient_addr = tx.payload.recipient;
 
-            let mut sender = get_account_local(&sender_addr)?;
-            let mut recipient = get_account_local(&recipient_addr)?;
+            let mut sender = get_account_local(&sender_addr, &account_cache, &self.state_manager)?;
+            let mut recipient = get_account_local(&recipient_addr, &account_cache, &self.state_manager)?;
 
             // Validate Nonce
             let expected_nonce = sender.nonce.increment();
@@ -176,19 +176,19 @@ impl ConsensusEngine {
         let (_, treasury_addr) = Address::from_bech32m("sumc1qszqgpqyqszqgpqyqszqgpqyqszqgpqypa49fy").unwrap();
 
         // Credit Miner
-        let mut miner = get_account_local(&miner_addr)?;
+        let mut miner = get_account_local(&miner_addr, &account_cache, &self.state_manager)?;
         miner.balance = miner.balance.checked_add(total_miner_payout)
             .ok_or_else(|| ConsensusError::Validation("Miner balance overflow".to_string()))?;
         account_cache.insert(miner_addr, miner);
 
         // Credit Validator
-        let mut validator = get_account_local(&validator_addr)?;
+        let mut validator = get_account_local(&validator_addr, &account_cache, &self.state_manager)?;
         validator.balance = validator.balance.checked_add(total_validator_payout)
             .ok_or_else(|| ConsensusError::Validation("Validator balance overflow".to_string()))?;
         account_cache.insert(validator_addr, validator);
 
         // Credit Treasury
-        let mut treasury = get_account_local(&treasury_addr)?;
+        let mut treasury = get_account_local(&treasury_addr, &account_cache, &self.state_manager)?;
         treasury.balance = treasury.balance.checked_add(total_treasury_payout)
             .ok_or_else(|| ConsensusError::Validation("Treasury balance overflow".to_string()))?;
         account_cache.insert(treasury_addr, treasury);
@@ -211,6 +211,7 @@ impl ConsensusEngine {
         self.storage.put_chain_height(new_height)?;
 
         Ok(block_hash)
+    }
 
     /// Calculate the block reward splits (Miner 70%, Validator 25%, Treasury 5%)
     /// incorporating the 4-year halving interval (4,204,800 blocks).

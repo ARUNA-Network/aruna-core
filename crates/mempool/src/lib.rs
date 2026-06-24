@@ -116,10 +116,10 @@ impl Mempool {
         };
 
         // 4. Nonce Verification (must be strictly greater than current on-chain nonce)
-        if tx.payload.nonce <= on_chain_nonce {
+        if tx.payload.nonce.0 <= on_chain_nonce {
             return Err(MempoolError::NonceTooLow {
                 expected: on_chain_nonce + 1,
-                got: tx.payload.nonce,
+                got: tx.payload.nonce.0,
             });
         }
 
@@ -142,7 +142,7 @@ impl Mempool {
                     break;
                 } else {
                     return Err(MempoolError::DuplicateNonce {
-                        nonce: tx.payload.nonce,
+                        nonce: tx.payload.nonce.0,
                         existing_fee: old_fee,
                         required_fee: min_new_fee,
                     });
@@ -376,7 +376,7 @@ mod tests {
             signature: sig1.to_vec(),
             public_key: pubkey.to_vec(),
         };
-        let hash1 = mempool.add_transaction(tx1, &storage).unwrap();
+        let hash1 = mempool.add_transaction(tx1.clone(), &storage).unwrap();
 
         // Second transaction with same nonce, but insufficient fee increase (5200 is only 4% increase)
         let payload2_bad = TransactionPayload {

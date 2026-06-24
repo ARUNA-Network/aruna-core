@@ -84,16 +84,45 @@ dependencies = [
 ]
 
 [[package]]
-name = "aruna-node"
+name = "aruna-mempool"
+version = "0.1.0"
+dependencies = [
+ "aruna-crypto",
+ "aruna-primitives",
+ "aruna-state",
+ "aruna-storage",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "aruna-networking"
 version = "0.1.0"
 dependencies = [
  "aruna-consensus",
  "aruna-crypto",
  "aruna-primitives",
+ "aruna-storage",
+ "bincode",
+ "serde",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "aruna-node"
+version = "0.1.0"
+dependencies = [
+ "aruna-consensus",
+ "aruna-crypto",
+ "aruna-mempool",
+ "aruna-networking",
+ "aruna-primitives",
  "aruna-state",
  "aruna-storage",
  "axum",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "toml",
@@ -135,7 +164,9 @@ dependencies = [
  "aruna-ahash",
  "aruna-crypto",
  "aruna-primitives",
+ "aruna-storage",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 

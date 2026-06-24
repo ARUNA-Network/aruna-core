@@ -121,7 +121,9 @@ fn submit_transaction_cli(tx_json: &str) -> Result<String, Box<dyn std::error::E
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 {
+    
+    // Check if the user is executing a CLI subcommand
+    if args.len() > 1 && !args[1].starts_with("-") {
         let subcommand = &args[1];
         let db_path = Path::new("./data_sumatera");
 
@@ -221,12 +223,61 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("  aruna-node block <h>     Display the block hash at height <h>");
                 println!("  aruna-node blocks        List all block heights from 1 to the current tip");
                 println!("  aruna-node submit <file> Submit a signed transaction JSON file to the mempool");
+                println!();
+                println!("Daemon Options (when starting the node):");
+                println!("  --p2p-port <port>        P2P listening port (default: 9000)");
+                println!("  --rpc-port <port>        HTTP RPC listening port (default: 8080)");
+                println!("  --peer <ip:port>         Bootstrap peer address to connect to");
                 println!("  aruna-node               Start the full node daemon (default)");
                 return Ok(());
             }
             other => {
                 eprintln!("Error: Unknown subcommand '{}'. Run with 'help' for usage.", other);
                 std::process::exit(1);
+            }
+        }
+    }
+
+    // Parse daemon arguments
+    let mut p2p_port = 9000;
+    let mut rpc_port = 8080;
+    let mut peer_addr = None;
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--p2p-port" => {
+                if i + 1 < args.len() {
+                    p2p_port = args[i + 1].parse::<u16>().expect("Invalid P2P port");
+                    i += 2;
+                } else {
+                    eprintln!("Error: Missing value for --p2p-port");
+                    std::process::exit(1);
+                }
+            }
+            "--rpc-port" => {
+                if i + 1 < args.len() {
+                    rpc_port = args[i + 1].parse::<u16>().expect("Invalid RPC port");
+                    i += 2;
+                } else {
+                    eprintln!("Error: Missing value for --rpc-port");
+                    std::process::exit(1);
+                }
+            }
+            "--peer" => {
+                if i + 1 < args.len() {
+                    let addr_str = &args[i + 1];
+                    let parsed: std::net::SocketAddr = addr_str.parse()
+                        .expect("Invalid peer address; must be IP:PORT format (e.g. 127.0.0.1:9000)");
+                    peer_addr = Some(parsed);
+                    i += 2;
+                } else {
+                    eprintln!("Error: Missing value for --peer");
+                    std::process::exit(1);
+                }
+            }
+            _ => {
+                i += 1;
             }
         }
     }
@@ -241,8 +292,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_str = std::fs::read_to_string(config_path)?;
     let config: GenesisConfig = toml::from_str(&config_str)?;
 
-    // 2. Establish data storage directory (Sumatera Testnet baseline)
-    let db_path = Path::new("./data_sumatera");
+    // 2. Establish data storage directory (dynamic depending on P2P port to allow local multi-node testing)
+    let db_dir = if p2p_port == 9000 {
+        "./data_sumatera".to_string()
+    } else {
+        format!("./data_sumatera_{}", p2p_port)
+    };
+    let db_path = Path::new(&db_dir);
     
     // 3. Open RocksDB Storage
     let storage = Storage::open(db_path)?;
@@ -322,18 +378,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 7. Initialize Mempool
     let mempool = Arc::new(Mempool::new(50000));
 
-    // 8. Start Block Producer Loop in background (Sprint A & B)
+    // 8. Initialize P2P Networking Manager
+    let p2p_manager = Arc::new(aruna_networking::P2PManager::new(
+        storage.clone(),
+        consensus_engine.clone(),
+        p2p_port,
+        config.genesis.chain_id,
+    ));
+
+    // Start P2P Server
+    p2p_manager.clone().start_server();
+
+    // Connect to bootstrap peer if provided
+    if let Some(peer) = peer_addr {
+        p2p_manager.clone().connect_to_peer(peer);
+    }
+
+    // 9. Start Block Producer Loop in background (Sprint A & B)
     // Produces a block every 30 seconds, validating it and persisting it to RocksDB.
     let storage_clone = storage.clone();
     let consensus_clone = consensus_engine.clone();
     let mempool_clone = mempool.clone();
+    let p2p_manager_clone = p2p_manager.clone();
     
     tokio::spawn(async move {
         println!("Starting Block Producer loop (30-second interval)...");
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
             
-            // 1. Fetch pending transactions from mempool
+            // Fetch pending transactions from mempool
             let txs = mempool_clone.get_pending_transactions(100);
             
             let current_height = match storage_clone.get_chain_height() {
@@ -350,12 +423,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let tx_count = block.body.transactions.len();
                     match consensus_clone.commit_block(&block) {
                         Ok(hash) => {
-                            // 2. Evict committed transactions from the mempool
+                            // Evict committed transactions from the mempool
                             let committed_hashes: Vec<Hash> = block.body.transactions.iter().map(|tx| {
                                 let bytes = aruna_primitives::serialize(tx).unwrap();
                                 aruna_crypto::blake3_hash(&bytes)
                             }).collect();
                             mempool_clone.remove_transactions(&committed_hashes);
+                            
+                            // Broadcast the block to P2P peers!
+                            p2p_manager_clone.broadcast_block(&block);
                             
                             let height = match storage_clone.get_chain_height() {
                                 Ok(h) => h.unwrap_or(0),
@@ -378,7 +454,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // 9. Start HTTP RPC Server (Sprint C & Sprint 2)
+    // 10. Start HTTP RPC Server (Sprint C & Sprint 2)
     let app_state = AppState {
         storage: storage.clone(),
         mempool,
@@ -389,8 +465,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/tx", post(post_tx))
         .with_state(app_state);
 
-    println!("Starting RPC server on 127.0.0.1:8080...");
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await?;
+    let rpc_addr = format!("127.0.0.1:{}", rpc_port);
+    println!("Starting RPC server on {}...", rpc_addr);
+    let listener = tokio::net::TcpListener::bind(&rpc_addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
