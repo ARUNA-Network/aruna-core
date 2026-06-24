@@ -13,8 +13,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let storage = Storage::open(db_path)?;
 
-    // 2. Generate test keypair
-    let keypair = Ed25519Keypair::generate();
+    // 2. Derive test keypair from a static seed to ensure the address is deterministic
+    let seed = [0x42u8; 32];
+    let keypair = Ed25519Keypair::from_seed(&seed);
     let pubkey = keypair.public_key_bytes();
     let pkh = derive_pubkey_hash(&pubkey);
     
