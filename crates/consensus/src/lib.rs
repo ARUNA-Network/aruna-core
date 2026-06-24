@@ -56,9 +56,6 @@ impl ConsensusEngine {
             .ok_or_else(|| ConsensusError::Validation("No best block found".to_string()))?;
         let best_header = self.storage.get_block_header(&best_hash)?
             .ok_or_else(|| ConsensusError::Validation("Best block header not found".to_string()))?;
-        let current_height = self.storage.get_chain_height()?
-            .ok_or_else(|| ConsensusError::Validation("Chain height not found".to_string()))?;
-
         let mut timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
