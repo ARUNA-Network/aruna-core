@@ -112,5 +112,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Storage : Opened");
     println!("State   : Initialized\n");
 
-    Ok(())
+    // 7. Start Block Producer Loop (Sprint A & B)
+    // Produces a block every 30 seconds, validating it and persisting it to RocksDB.
+    println!("Starting Block Producer loop (30-second interval)...");
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(30));
+        match _consensus_engine.produce_block() {
+            Ok(block) => {
+                match _consensus_engine.commit_block(&block) {
+                    Ok(hash) => {
+                        let height = storage.get_chain_height()?.unwrap_or(0);
+                        println!(
+                            "Block #{} produced | Height: {} | Height={} | Hash: {}",
+                            height, height, height, hash
+                        );
+                    }
+                    Err(e) => eprintln!("Error committing block: {:?}", e),
+                }
+            }
+            Err(e) => eprintln!("Error producing block: {:?}", e),
+        }
+    }
 }

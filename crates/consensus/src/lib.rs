@@ -35,6 +35,7 @@ pub enum ConsensusError {
 }
 
 /// The consensus validation coordinator.
+#[derive(Clone)]
 pub struct ConsensusEngine {
     state_manager: StateManager,
     storage: Storage,
@@ -47,6 +48,70 @@ impl ConsensusEngine {
             state_manager,
             storage,
         }
+    }
+
+    /// Produces a new block extending the current best block tip.
+    pub fn produce_block(&self) -> Result<Block, ConsensusError> {
+        let best_hash = self.storage.get_best_block()?
+            .ok_or_else(|| ConsensusError::Validation("No best block found".to_string()))?;
+        let best_header = self.storage.get_block_header(&best_hash)?
+            .ok_or_else(|| ConsensusError::Validation("Best block header not found".to_string()))?;
+        let current_height = self.storage.get_chain_height()?
+            .ok_or_else(|| ConsensusError::Validation("Chain height not found".to_string()))?;
+
+        let new_height = current_height + 1;
+        let mut timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Enforce strictly increasing block timestamps
+        if timestamp <= best_header.timestamp {
+            timestamp = best_header.timestamp + 1;
+        }
+
+        let header = BlockHeader {
+            version: 1,
+            prev_block_hash: best_hash,
+            merkle_root: Hash::zero(),
+            timestamp,
+            difficulty: best_header.difficulty,
+            nonce: 0,
+            validator_root: Hash::zero(),
+            treasury_root: Hash::zero(),
+        };
+
+        let body = BlockBody {
+            transactions: vec![],
+            validator_metadata: vec![],
+            ecosystem_metadata: vec![],
+        };
+
+        let block = Block { header, body };
+
+        // Perform consensus dry-run validations on the new block
+        self.validate_block(&block)?;
+
+        Ok(block)
+    }
+
+    /// Commits a block to the RocksDB database, updating best block tips and height indexes.
+    pub fn commit_block(&self, block: &Block) -> Result<Hash, ConsensusError> {
+        let header_bytes = serialize(&block.header)
+            .map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
+        let block_hash = aruna_crypto::blake3_hash(&header_bytes);
+
+        self.storage.put_block_header(&block_hash, &block.header)?;
+        self.storage.put_block_body(&block_hash, &block.body)?;
+
+        let current_height = self.storage.get_chain_height()?.unwrap_or(0);
+        let new_height = current_height + 1;
+
+        self.storage.put_block_height_map(new_height, &block_hash)?;
+        self.storage.put_best_block(&block_hash)?;
+        self.storage.put_chain_height(new_height)?;
+
+        Ok(block_hash)
     }
 
     /// Calculate the block reward splits (Miner 70%, Validator 25%, Treasury 5%)

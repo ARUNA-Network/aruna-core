@@ -31,11 +31,11 @@ jobs:
       - name: Build Aruna Node
         run: cargo build -p aruna-node
 
-      - name: Run Node (First Startup - Milestone B)
+      - name: Run Node (First Startup - Milestone B & A)
         run: |
-          timeout 15s cargo run -p aruna-node > node_startup.log 2>&1 || true
+          timeout 65s cargo run -p aruna-node > node_startup.log 2>&1 || true
 
-      - name: Verify First Startup Log
+      - name: Verify First Startup & Block Production Log
         run: |
           cat node_startup.log
           grep "Initializing new ledger state from genesis config" node_startup.log
@@ -43,6 +43,11 @@ jobs:
           grep "Genesis : Loaded" node_startup.log
           grep "Storage : Opened" node_startup.log
           grep "State   : Initialized" node_startup.log
+          grep "Block #1 produced" node_startup.log
+          grep "Block #2 produced" node_startup.log
+          grep "Height: 1" node_startup.log
+          grep "Height: 2" node_startup.log
+          grep "Height=2" node_startup.log
 
       - name: Verify RocksDB Database Created
         run: |
@@ -50,11 +55,14 @@ jobs:
 
       - name: Run Node (Second Startup - Milestone C)
         run: |
-          timeout 15s cargo run -p aruna-node > node_recovery.log 2>&1 || true
+          timeout 35s cargo run -p aruna-node > node_recovery.log 2>&1 || true
 
-      - name: Verify Recovery Log
+      - name: Verify Recovery & Persistence Log
         run: |
           cat node_recovery.log
           grep "Genesis already initialized. Loading existing ledger state" node_recovery.log
+          grep "Block #3 produced" node_recovery.log
+          grep "Height: 3" node_recovery.log
+          grep "Height=3" node_recovery.log
           ! grep "Initializing new ledger state from genesis config" node_recovery.log
 
