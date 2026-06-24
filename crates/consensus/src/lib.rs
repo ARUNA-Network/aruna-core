@@ -198,7 +198,7 @@ impl ConsensusEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aruna_primitives::{Address, AccountState, Nonce, Difficulty, TransactionPayload, BlockBody};
+    use aruna_primitives::{Address, Nonce, TransactionPayload};
     use aruna_crypto::Ed25519Keypair;
 
     fn temp_db_path() -> std::path::PathBuf {

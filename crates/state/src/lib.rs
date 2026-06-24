@@ -175,7 +175,7 @@ impl StateManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aruna_primitives::{Difficulty, SignatureType, TransactionPayload};
+    use aruna_primitives::{SignatureType, TransactionPayload};
 
     fn temp_db_path() -> std::path::PathBuf {
         let mut path = std::env::temp_dir();
