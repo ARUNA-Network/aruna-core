@@ -1,0 +1,13 @@
+ARUNA Core Node starting...
+Initializing new ledger state from genesis config...
+
+ARUNA Node Started
+Network : Sumatera Testnet
+Height  : 0
+Genesis : Loaded
+Storage : Opened
+State   : Initialized
+
+P2P server successfully listening on P2P port 9002
+Starting Block Producer loop (30-second interval)...
+Starting RPC server on 127.0.0.1:8082...

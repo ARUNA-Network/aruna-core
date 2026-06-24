@@ -6,7 +6,7 @@ use aruna_storage::{Storage, StorageBatch};
 use aruna_state::StateManager;
 use aruna_consensus::ConsensusEngine;
 use aruna_mempool::Mempool;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -14,7 +14,8 @@ use axum::{
     routing::{get, post},
     Router,
     Json,
-    extract::State,
+    extract::{State, Path as AxumPath, Query},
+    http::StatusCode,
 };
 
 #[derive(Debug, Deserialize)]
@@ -38,13 +39,13 @@ struct AppState {
     p2p_manager: Arc<aruna_networking::P2PManager>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(Serialize)]
 struct StatusResponse {
     network: String,
     height: u64,
 }
 
-#[derive(serde::Serialize)]
+#[derive(Serialize)]
 struct TxResponse {
     status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -53,9 +54,60 @@ struct TxResponse {
     message: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct BlocksParams {
+    limit: Option<usize>,
+    offset: Option<usize>,
+}
+
+#[derive(Serialize)]
+struct TipResponse {
+    hash: String,
+    height: u64,
+}
+
+#[derive(Serialize)]
+struct BlockSummaryResponse {
+    height: u64,
+    hash: String,
+    prev_block_hash: String,
+    merkle_root: String,
+    timestamp: u64,
+    difficulty: u64,
+    nonce: u64,
+    tx_count: usize,
+}
+
+#[derive(Serialize)]
+struct BlockDetailResponse {
+    hash: String,
+    header: BlockHeader,
+    body: BlockBody,
+}
+
+#[derive(Serialize)]
+struct AddressResponse {
+    address: String,
+    balance: u64,
+    nonce: u64,
+    code_hash: String,
+    storage_root: String,
+}
+
+#[derive(Serialize)]
+struct TransactionResponse {
+    hash: String,
+    status: String, // "pending" or "committed"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    block_height: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    block_hash: Option<String>,
+    transaction: TransactionEnvelope,
+}
+
 async fn get_status(
     State(state): State<AppState>,
-) -> Result<Json<StatusResponse>, (axum::http::StatusCode, String)> {
+) -> Result<Json<StatusResponse>, (StatusCode, String)> {
     match state.storage.get_chain_height() {
         Ok(maybe_height) => {
             let height = maybe_height.unwrap_or(0);
@@ -65,7 +117,7 @@ async fn get_status(
             }))
         }
         Err(e) => Err((
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::INTERNAL_SERVER_ERROR,
             format!("Database error: {:?}", e),
         )),
     }
@@ -74,7 +126,7 @@ async fn get_status(
 async fn post_tx(
     State(state): State<AppState>,
     Json(tx): Json<TransactionEnvelope>,
-) -> Result<Json<TxResponse>, (axum::http::StatusCode, Json<TxResponse>)> {
+) -> Result<Json<TxResponse>, (StatusCode, Json<TxResponse>)> {
     match state.mempool.add_transaction(tx.clone(), &state.storage) {
         Ok(hash) => {
             // Gossip (broadcast) the transaction to the P2P network!
@@ -87,7 +139,7 @@ async fn post_tx(
             }))
         }
         Err(e) => Err((
-            axum::http::StatusCode::BAD_REQUEST,
+            StatusCode::BAD_REQUEST,
             Json(TxResponse {
                 status: "error".to_string(),
                 tx_hash: None,
@@ -95,6 +147,172 @@ async fn post_tx(
             }),
         )),
     }
+}
+
+async fn get_chain_tip(
+    State(state): State<AppState>,
+) -> Result<Json<TipResponse>, (StatusCode, String)> {
+    let height = state.storage.get_chain_height()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .unwrap_or(0);
+    let hash = state.storage.get_best_block()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .map(|h| h.to_string())
+        .unwrap_or_else(|| "none".to_string());
+
+    Ok(Json(TipResponse { hash, height }))
+}
+
+async fn get_blocks(
+    State(state): State<AppState>,
+    Query(params): Query<BlocksParams>,
+) -> Result<Json<Vec<BlockSummaryResponse>>, (StatusCode, String)> {
+    let limit = params.limit.unwrap_or(20).min(100);
+    let offset = params.offset.unwrap_or(0);
+
+    let height = state.storage.get_chain_height()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .unwrap_or(0);
+
+    if offset > height as usize {
+        return Ok(Json(vec![]));
+    }
+
+    let start = height.saturating_sub(offset as u64);
+    let end = start.saturating_sub(limit as u64 - 1); // bounds are inclusive
+
+    let mut summaries = Vec::new();
+    for h in (end..=start).rev() {
+        if let Some(hash) = state.storage.get_block_hash_by_height(h)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        {
+            let header = state.storage.get_block_header(&hash)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+                .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!("Block header missing at height {}", h)))?;
+            
+            let body = state.storage.get_block_body(&hash)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+                .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!("Block body missing at height {}", h)))?;
+
+            summaries.push(BlockSummaryResponse {
+                height: h,
+                hash: hash.to_string(),
+                prev_block_hash: header.prev_block_hash.to_string(),
+                merkle_root: header.merkle_root.to_string(),
+                timestamp: header.timestamp,
+                difficulty: header.difficulty.0 as u64,
+                nonce: header.nonce,
+                tx_count: body.transactions.len(),
+            });
+        }
+    }
+
+    Ok(Json(summaries))
+}
+
+async fn get_block_by_height(
+    AxumPath(height): AxumPath<u64>,
+    State(state): State<AppState>,
+) -> Result<Json<BlockDetailResponse>, (StatusCode, String)> {
+    let hash = state.storage.get_block_hash_by_height(height)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Block not found at height {}", height)))?;
+
+    let header = state.storage.get_block_header(&hash)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!("Block header missing for hash {}", hash)))?;
+
+    let body = state.storage.get_block_body(&hash)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!("Block body missing for hash {}", hash)))?;
+
+    Ok(Json(BlockDetailResponse {
+        hash: hash.to_string(),
+        header,
+        body,
+    }))
+}
+
+async fn get_address_state(
+    AxumPath(address_str): AxumPath<String>,
+    State(state): State<AppState>,
+) -> Result<Json<AddressResponse>, (StatusCode, String)> {
+    let (hrp, addr) = Address::from_bech32m(&address_str)
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid address format: {:?}", e)))?;
+
+    // Rule: regional prefix validation for Sumatera Testnet
+    if hrp != "sum" && hrp != "sumc" {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Invalid address prefix '{}': expected sum1 or sumc1", hrp),
+        ));
+    }
+
+    let account_state = state.storage.get_account(&addr)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?;
+
+    let (balance, nonce, code_hash, storage_root) = match account_state {
+        Some((bal, non, ch, sr)) => (bal, non, ch.to_string(), sr.to_string()),
+        None => (
+            0,
+            0,
+            Hash::zero().to_string(),
+            Hash::zero().to_string(),
+        ),
+    };
+
+    Ok(Json(AddressResponse {
+        address: address_str,
+        balance,
+        nonce,
+        code_hash,
+        storage_root,
+    }))
+}
+
+async fn get_transaction_by_hash(
+    AxumPath(hash_str): AxumPath<String>,
+    State(state): State<AppState>,
+) -> Result<Json<TransactionResponse>, (StatusCode, String)> {
+    let tx_hash = Hash::from_hex(&hash_str)
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid transaction hash format: {:?}", e)))?;
+
+    // 1. Check the mempool first (fast path)
+    if let Some(tx) = state.mempool.get_transaction(&tx_hash) {
+        return Ok(Json(TransactionResponse {
+            hash: hash_str,
+            status: "pending".to_string(),
+            block_height: None,
+            block_hash: None,
+            transaction: tx,
+        }));
+    }
+
+    // 2. Check the database (slow path)
+    if let Some((block_hash, tx_idx)) = state.storage.get_tx_index(&tx_hash)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+    {
+        let body = state.storage.get_block_body(&block_hash)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+            .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!("Block body missing for hash {}", block_hash)))?;
+
+        let tx = body.transactions.get(tx_idx as usize)
+            .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!("Transaction missing in block body at index {}", tx_idx)))?
+            .clone();
+
+        let block_height = state.storage.get_block_height_by_hash(&block_hash)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?;
+
+        return Ok(Json(TransactionResponse {
+            hash: hash_str,
+            status: "committed".to_string(),
+            block_height,
+            block_hash: Some(block_hash.to_string()),
+            transaction: tx,
+        }));
+    }
+
+    Err((StatusCode::NOT_FOUND, format!("Transaction {} not found", hash_str)))
 }
 
 fn submit_transaction_cli(tx_json: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -361,6 +579,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Update Chain Metadata indexes in storage batch
         batch.put_block_height_map(0, &genesis_hash);
+        batch.put_block_height_by_hash(&genesis_hash, 0);
         
         storage.write_batch(batch)?;
         
@@ -371,6 +590,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         storage.put_chain_id(config.genesis.chain_id)?;
     } else {
         println!("Genesis already initialized. Loading existing ledger state...");
+    }
+
+    // --- Self-Healing Index Backfill ---
+    let best_height = storage.get_chain_height()?.unwrap_or(0);
+    for h in 0..=best_height {
+        if let Some(hash) = storage.get_block_hash_by_height(h)? {
+            if storage.get_block_height_by_hash(&hash)?.is_none() {
+                println!("Backfilling block hash to height index for block #{} ({})", h, hash);
+                storage.put_block_height_by_hash(&hash, h)?;
+            }
+        }
     }
 
     // 6. Print Node Successful initialization banner
@@ -471,6 +701,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/status", get(get_status))
         .route("/tx", post(post_tx))
+        .route("/chain/tip", get(get_chain_tip))
+        .route("/blocks", get(get_blocks))
+        .route("/block/:height", get(get_block_by_height))
+        .route("/address/:address", get(get_address_state))
+        .route("/transaction/:hash", get(get_transaction_by_hash))
         .with_state(app_state);
 
     let rpc_addr = format!("127.0.0.1:{}", rpc_port);

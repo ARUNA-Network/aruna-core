@@ -118,7 +118,7 @@ impl ConsensusEngine {
         };
 
         // 4. Execute all transactions in the block body
-        for tx in &block.body.transactions {
+        for (tx_idx, tx) in block.body.transactions.iter().enumerate() {
             let sender_addr = tx.payload.sender;
             let recipient_addr = tx.payload.recipient;
 
@@ -154,6 +154,12 @@ impl ConsensusEngine {
 
             account_cache.insert(sender_addr, sender);
             account_cache.insert(recipient_addr, recipient);
+
+            // Index transaction location: tx_hash -> (block_hash, tx_index)
+            let tx_bytes = serialize(tx)
+                .map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
+            let tx_hash = aruna_crypto::blake3_hash(&tx_bytes);
+            batch.put_tx_index(&tx_hash, &block_hash, tx_idx as u32);
         }
 
         // 5. Distribute block rewards and accumulated fees
@@ -198,8 +204,9 @@ impl ConsensusEngine {
             batch.put_account(&addr, acc.balance, acc.nonce.0, &acc.code_hash, &acc.storage_root);
         }
 
-        // 7. Write block header, body, and height mapping to storage batch
+        // 7. Write block header, body, height mapping, and hash-to-height mapping to storage batch
         batch.put_block_height_map(new_height, &block_hash);
+        batch.put_block_height_by_hash(&block_hash, new_height);
 
         // 8. Commit storage batch atomically
         self.storage.write_batch(batch)?;

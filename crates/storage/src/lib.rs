@@ -14,6 +14,7 @@ const PREFIX_BODY: u8 = b'd';
 const PREFIX_TX_INDEX: u8 = b't';
 const PREFIX_HEIGHT_MAP: u8 = b'b';
 const PREFIX_META: u8 = b'm';
+const PREFIX_HASH_TO_HEIGHT: u8 = b'n';
 
 /// Database storage error types.
 #[derive(Error, Debug)]
@@ -105,6 +106,13 @@ impl Storage {
         let mut key = [0u8; 9];
         key[0] = PREFIX_HEIGHT_MAP;
         key[1..9].copy_from_slice(&height.to_be_bytes());
+        key
+    }
+
+    fn hash_to_height_key(hash: &Hash) -> [u8; 33] {
+        let mut key = [0u8; 33];
+        key[0] = PREFIX_HASH_TO_HEIGHT;
+        key[1..33].copy_from_slice(&hash.0);
         key
     }
 
@@ -303,6 +311,29 @@ impl Storage {
         Ok(())
     }
 
+    /// Map block hash to its height.
+    pub fn put_block_height_by_hash(&self, hash: &Hash, height: u64) -> Result<(), StorageError> {
+        let key = Self::hash_to_height_key(hash);
+        self.db.put(key, height.to_be_bytes())?;
+        Ok(())
+    }
+
+    /// Retrieve block height for a given hash.
+    pub fn get_block_height_by_hash(&self, hash: &Hash) -> Result<Option<u64>, StorageError> {
+        let key = Self::hash_to_height_key(hash);
+        match self.db.get(key)? {
+            Some(bytes) => {
+                if bytes.len() != 8 {
+                    return Err(StorageError::Format("Invalid height length".to_string()));
+                }
+                let mut height_bytes = [0u8; 8];
+                height_bytes.copy_from_slice(&bytes);
+                Ok(Some(u64::from_be_bytes(height_bytes)))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Retrieve block hash for a given height.
     pub fn get_block_hash_by_height(&self, height: u64) -> Result<Option<Hash>, StorageError> {
         let key = Self::height_map_key(height);
@@ -462,6 +493,12 @@ impl StorageBatch {
         let key = Storage::height_map_key(height);
         self.batch.put(key, hash.0);
     }
+
+    /// Add block hash to height mapping to batch.
+    pub fn put_block_height_by_hash(&mut self, hash: &Hash, height: u64) {
+        let key = Storage::hash_to_height_key(hash);
+        self.batch.put(key, height.to_be_bytes());
+    }
 }
 
 #[cfg(test)]
@@ -552,6 +589,21 @@ mod tests {
             let (b2, _, _, _) = storage.get_account(&addr2).unwrap().unwrap();
             assert_eq!(b1, 100);
             assert_eq!(b2, 200);
+        }
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
+    #[test]
+    fn test_storage_hash_to_height_roundtrip() {
+        let path = temp_db_path();
+        {
+            let storage = Storage::open(&path).unwrap();
+            let block_hash = Hash([0xaa; 32]);
+            let height = 123456;
+
+            assert!(storage.get_block_height_by_hash(&block_hash).unwrap().is_none());
+            storage.put_block_height_by_hash(&block_hash, height).unwrap();
+            assert_eq!(storage.get_block_height_by_hash(&block_hash).unwrap().unwrap(), height);
         }
         let _ = std::fs::remove_dir_all(&path);
     }

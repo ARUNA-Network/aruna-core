@@ -1,7 +1,7 @@
 //! Asynchronous P2P networking and block synchronization layer for the ARUNA Network.
 //! Uses a lightweight length-prefixed TCP protocol to exchange handshake, synchronization, and block broadcast messages.
 
-use aruna_primitives::{Address, Hash, Block, HandshakeMessage, SyncRequestMessage, SyncResponseMessage, ChainId, TransactionEnvelope};
+use aruna_primitives::{Block, HandshakeMessage, SyncRequestMessage, SyncResponseMessage, ChainId, TransactionEnvelope};
 use aruna_storage::Storage;
 use aruna_consensus::ConsensusEngine;
 use aruna_mempool::Mempool;

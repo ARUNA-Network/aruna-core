@@ -240,6 +240,11 @@ impl Mempool {
     pub fn contains(&self, hash: &Hash) -> bool {
         self.transactions.read().unwrap().contains_key(hash)
     }
+
+    /// Returns the transaction envelope if it exists in the mempool.
+    pub fn get_transaction(&self, hash: &Hash) -> Option<TransactionEnvelope> {
+        self.transactions.read().unwrap().get(hash).cloned()
+    }
 }
 
 #[cfg(test)]
