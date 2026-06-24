@@ -10,6 +10,7 @@ aruna-primitives = { path = "../primitives" }
 aruna-crypto = { path = "../crypto" }
 aruna-storage = { path = "../storage" }
 aruna-consensus = { path = "../consensus" }
+aruna-mempool = { path = "../mempool" }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

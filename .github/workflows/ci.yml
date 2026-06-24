@@ -166,3 +166,48 @@ jobs:
           grep -q "Synced and committed Block #6" node_b.log
           grep -q "Synchronization complete" node_b.log
 
+      - name: Run Local Two-Node Transaction Propagation Check
+        run: |
+          # Clean up databases to start with a fresh slate
+          rm -rf ./data_sumatera ./data_sumatera_9000 ./data_sumatera_9001
+          
+          echo "Starting Node A on P2P port 9000, RPC port 8080..."
+          cargo run -p aruna-node -- --p2p-port 9000 --rpc-port 8080 > node_a_tx.log 2>&1 &
+          NODE_A_PID=$!
+          
+          # Wait 5 seconds for Node A to initialize
+          sleep 5
+          
+          echo "Starting Node B on P2P port 9001, RPC port 8081, connecting to Node A..."
+          cargo run -p aruna-node -- --p2p-port 9001 --rpc-port 8081 --peer 127.0.0.1:9000 > node_b_tx.log 2>&1 &
+          NODE_B_PID=$!
+          
+          # Wait 5 seconds for P2P connection and handshake
+          sleep 5
+          
+          echo "Generating and signing test transaction..."
+          cargo run -p aruna-testing --bin mempool_test_prep
+          
+          # Submit the transaction to Node A
+          echo "Submitting transaction to Node A..."
+          curl -s -X POST -H "Content-Type: application/json" -d @test_tx.json http://127.0.0.1:8080/tx > submit_res.json
+          cat submit_res.json
+          grep -q '"status":"success"' submit_res.json
+          
+          # Wait 5 seconds for P2P transaction gossip
+          sleep 5
+          
+          # Terminate both nodes
+          kill $NODE_A_PID $NODE_B_PID || true
+          wait $NODE_A_PID $NODE_B_PID || true
+          
+          echo "=== Node A Transaction Logs ==="
+          cat node_a_tx.log
+          
+          echo "=== Node B Transaction Logs ==="
+          cat node_b_tx.log
+          
+          # Assert that Node B successfully received, validated, and added the transaction to its mempool
+          grep -q "Received and added P2P transaction to mempool" node_b_tx.log
+
+

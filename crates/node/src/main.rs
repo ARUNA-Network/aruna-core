@@ -35,6 +35,7 @@ struct GenesisParameters {
 struct AppState {
     storage: Storage,
     mempool: Arc<Mempool>,
+    p2p_manager: Arc<aruna_networking::P2PManager>,
 }
 
 #[derive(serde::Serialize)]
@@ -74,12 +75,17 @@ async fn post_tx(
     State(state): State<AppState>,
     Json(tx): Json<TransactionEnvelope>,
 ) -> Result<Json<TxResponse>, (axum::http::StatusCode, Json<TxResponse>)> {
-    match state.mempool.add_transaction(tx, &state.storage) {
-        Ok(hash) => Ok(Json(TxResponse {
-            status: "success".to_string(),
-            tx_hash: Some(hash.to_string()),
-            message: None,
-        })),
+    match state.mempool.add_transaction(tx.clone(), &state.storage) {
+        Ok(hash) => {
+            // Gossip (broadcast) the transaction to the P2P network!
+            state.p2p_manager.broadcast_transaction(&tx, None);
+            
+            Ok(Json(TxResponse {
+                status: "success".to_string(),
+                tx_hash: Some(hash.to_string()),
+                message: None,
+            }))
+        }
         Err(e) => Err((
             axum::http::StatusCode::BAD_REQUEST,
             Json(TxResponse {
@@ -382,6 +388,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let p2p_manager = Arc::new(aruna_networking::P2PManager::new(
         storage.clone(),
         consensus_engine.clone(),
+        mempool.clone(),
         p2p_port,
         config.genesis.chain_id,
     ));
@@ -458,6 +465,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_state = AppState {
         storage: storage.clone(),
         mempool,
+        p2p_manager: p2p_manager.clone(),
     };
 
     let app = Router::new()

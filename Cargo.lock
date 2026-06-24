@@ -101,6 +101,7 @@ version = "0.1.0"
 dependencies = [
  "aruna-consensus",
  "aruna-crypto",
+ "aruna-mempool",
  "aruna-primitives",
  "aruna-storage",
  "bincode",

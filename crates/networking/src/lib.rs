@@ -1,9 +1,10 @@
 //! Asynchronous P2P networking and block synchronization layer for the ARUNA Network.
 //! Uses a lightweight length-prefixed TCP protocol to exchange handshake, synchronization, and block broadcast messages.
 
-use aruna_primitives::{Address, Hash, Block, HandshakeMessage, SyncRequestMessage, SyncResponseMessage, ChainId};
+use aruna_primitives::{Address, Hash, Block, HandshakeMessage, SyncRequestMessage, SyncResponseMessage, ChainId, TransactionEnvelope};
 use aruna_storage::Storage;
 use aruna_consensus::ConsensusEngine;
+use aruna_mempool::Mempool;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
@@ -17,6 +18,7 @@ pub enum P2PMessage {
     SyncRequest(SyncRequestMessage),
     SyncResponse(SyncResponseMessage),
     BlockBroadcast(Block),
+    TransactionBroadcast(TransactionEnvelope),
 }
 
 /// Helper function to write a length-prefixed P2PMessage over an asynchronous writer.
@@ -54,6 +56,7 @@ where
 pub struct P2PManager {
     storage: Storage,
     consensus: ConsensusEngine,
+    mempool: Arc<Mempool>,
     p2p_port: u16,
     chain_id: u32,
     peer_writers: Arc<Mutex<Vec<mpsc::UnboundedSender<P2PMessage>>>>,
@@ -61,10 +64,11 @@ pub struct P2PManager {
 
 impl P2PManager {
     /// Create a new P2PManager instance.
-    pub fn new(storage: Storage, consensus: ConsensusEngine, p2p_port: u16, chain_id: u32) -> Self {
+    pub fn new(storage: Storage, consensus: ConsensusEngine, mempool: Arc<Mempool>, p2p_port: u16, chain_id: u32) -> Self {
         Self {
             storage,
             consensus,
+            mempool,
             p2p_port,
             chain_id,
             peer_writers: Arc::new(Mutex::new(Vec::new())),
@@ -77,6 +81,20 @@ impl P2PManager {
         let writers = self.peer_writers.lock().unwrap();
         for tx in writers.iter() {
             let _ = tx.send(msg.clone());
+        }
+    }
+
+    /// Broadcast a transaction to all active connected peers (optionally excluding one peer).
+    pub fn broadcast_transaction(&self, tx: &TransactionEnvelope, exclude_tx: Option<&mpsc::UnboundedSender<P2PMessage>>) {
+        let msg = P2PMessage::TransactionBroadcast(tx.clone());
+        let writers = self.peer_writers.lock().unwrap();
+        for writer in writers.iter() {
+            if let Some(exc) = exclude_tx {
+                if writer.same_channel(exc) {
+                    continue;
+                }
+            }
+            let _ = writer.send(msg.clone());
         }
     }
 
@@ -291,6 +309,29 @@ impl P2PManager {
                                 }
                                 Err(e) => {
                                     eprintln!("Broadcasted block commit failed: {:?}", e);
+                                }
+                            }
+                        }
+                    }
+                    P2PMessage::TransactionBroadcast(tx_envelope) => {
+                        // Received transaction broadcast from peer.
+                        // Validate and attempt to insert into local mempool.
+                        match self.mempool.add_transaction(tx_envelope.clone(), &self.storage) {
+                            Ok(hash) => {
+                                println!("Received and added P2P transaction to mempool | Hash: {}", hash);
+                                // Gossip (relay) the transaction to other peers, excluding the peer that sent it to us.
+                                self.broadcast_transaction(&tx_envelope, Some(&tx));
+                            }
+                            Err(e) => {
+                                // Silently ignore duplicates or already committed transactions.
+                                match e {
+                                    aruna_mempool::MempoolError::DuplicateNonce { .. } |
+                                    aruna_mempool::MempoolError::NonceTooLow { .. } => {
+                                        // common, ignore
+                                    }
+                                    other => {
+                                        println!("P2P transaction validation rejected from peer {}: {:?}", peer_addr, other);
+                                    }
                                 }
                             }
                         }
