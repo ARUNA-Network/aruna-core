@@ -55,14 +55,29 @@ jobs:
         run: |
           ls -lah data_sumatera/
 
-      - name: Run Node (Second Startup & RPC Verification)
+      - name: Prepare Mempool Test Transaction
+        run: |
+          cargo run -p aruna-testing --bin mempool_test_prep
+
+      - name: Run Node, Submit Tx & RPC Verification
         run: |
           cargo run -p aruna-node > node_recovery.log 2>&1 &
           NODE_PID=$!
           echo "Node started in background with PID $NODE_PID"
           
-          # Wait 92 seconds for blocks 4, 5, and 6 to be produced
-          sleep 92
+          # Wait 5 seconds for RPC server to bind
+          sleep 5
+          
+          echo "Submitting test transaction via CLI submit command..."
+          cargo run -p aruna-node -- submit test_tx.json > submit_response.json
+          cat submit_response.json
+          
+          # Assert transaction successfully accepted by mempool
+          grep -q '"status":"success"' submit_response.json
+          grep -q '"tx_hash":' submit_response.json
+          
+          # Wait remaining 87 seconds for blocks 4, 5, and 6 to be produced
+          sleep 87
           
           echo "Querying RPC /status endpoint..."
           curl -s http://127.0.0.1:8080/status > rpc_status.json

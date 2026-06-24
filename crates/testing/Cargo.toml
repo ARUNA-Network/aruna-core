@@ -9,5 +9,7 @@ repository.workspace = true
 aruna-primitives = { path = "../primitives" }
 aruna-crypto = { path = "../crypto" }
 aruna-ahash = { path = "../ahash" }
+aruna-storage = { path = "../storage" }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }

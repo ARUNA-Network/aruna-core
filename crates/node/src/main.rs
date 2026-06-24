@@ -1,15 +1,17 @@
 //! ARUNA core node runner.
 //! Loads genesis configuration from toml file, initializes RocksDB storage, and verifies ledger state.
 
-use aruna_primitives::{Block, BlockBody, BlockHeader, Hash, Address, Difficulty};
+use aruna_primitives::{Block, BlockBody, BlockHeader, Hash, Address, Difficulty, TransactionEnvelope};
 use aruna_storage::{Storage, StorageBatch};
 use aruna_state::StateManager;
 use aruna_consensus::ConsensusEngine;
+use aruna_mempool::Mempool;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use axum::{
-    routing::get,
+    routing::{get, post},
     Router,
     Json,
     extract::State,
@@ -29,16 +31,31 @@ struct GenesisParameters {
     chain_id: u32,
 }
 
+#[derive(Clone)]
+struct AppState {
+    storage: Storage,
+    mempool: Arc<Mempool>,
+}
+
 #[derive(serde::Serialize)]
 struct StatusResponse {
     network: String,
     height: u64,
 }
 
+#[derive(serde::Serialize)]
+struct TxResponse {
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tx_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
+}
+
 async fn get_status(
-    State(storage): State<Storage>,
+    State(state): State<AppState>,
 ) -> Result<Json<StatusResponse>, (axum::http::StatusCode, String)> {
-    match storage.get_chain_height() {
+    match state.storage.get_chain_height() {
         Ok(maybe_height) => {
             let height = maybe_height.unwrap_or(0);
             Ok(Json(StatusResponse {
@@ -53,71 +70,157 @@ async fn get_status(
     }
 }
 
+async fn post_tx(
+    State(state): State<AppState>,
+    Json(tx): Json<TransactionEnvelope>,
+) -> Result<Json<TxResponse>, (axum::http::StatusCode, Json<TxResponse>)> {
+    match state.mempool.add_transaction(tx, &state.storage) {
+        Ok(hash) => Ok(Json(TxResponse {
+            status: "success".to_string(),
+            tx_hash: Some(hash.to_string()),
+            message: None,
+        })),
+        Err(e) => Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(TxResponse {
+                status: "error".to_string(),
+                tx_hash: None,
+                message: Some(e.to_string()),
+            }),
+        )),
+    }
+}
+
+fn submit_transaction_cli(tx_json: &str) -> Result<String, Box<dyn std::error::Error>> {
+    use std::io::{Write, Read};
+    use std::net::TcpStream;
+
+    let mut stream = TcpStream::connect("127.0.0.1:8080")?;
+    let request = format!(
+        "POST /tx HTTP/1.1\r\n\
+         Host: 127.0.0.1:8080\r\n\
+         Content-Type: application/json\r\n\
+         Content-Length: {}\r\n\
+         Connection: close\r\n\r\n\
+         {}",
+        tx_json.len(),
+        tx_json
+    );
+    stream.write_all(request.as_bytes())?;
+    
+    let mut response = String::new();
+    stream.read_to_string(&mut response)?;
+    
+    if let Some(body_start) = response.find("\r\n\r\n") {
+        Ok(response[body_start + 4..].to_string())
+    } else {
+        Ok(response)
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 {
         let subcommand = &args[1];
         let db_path = Path::new("./data_sumatera");
-        
-        // Try to open the database in read-only mode
-        let storage = match Storage::open_read_only(db_path) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Error opening database in read-only mode: {:?}", e);
-                eprintln!("Please ensure the node has been started at least once to initialize the database.");
-                std::process::exit(1);
-            }
-        };
 
         match subcommand.as_str() {
-            "status" => {
-                let height = storage.get_chain_height()?.unwrap_or(0);
-                let tip_hash = storage.get_best_block()?
-                    .map(|h| h.to_string())
-                    .unwrap_or_else(|| "none".to_string());
-                
-                println!("{{\"height\":{},\"tip\":\"{}\"}}", height, tip_hash);
-                return Ok(());
-            }
-            "block" => {
+            "submit" => {
                 if args.len() < 3 {
-                    eprintln!("Error: Missing block height. Usage: aruna-node block <height>");
+                    eprintln!("Error: Missing transaction JSON file. Usage: aruna-node submit <tx_json_file>");
                     std::process::exit(1);
                 }
-                let height_str = &args[2];
-                let height = match height_str.parse::<u64>() {
-                    Ok(h) => h,
-                    Err(_) => {
-                        eprintln!("Error: Invalid block height '{}'. Must be a non-negative integer.", height_str);
+                let file_path = &args[2];
+                let tx_json = match std::fs::read_to_string(file_path) {
+                    Ok(content) => content,
+                    Err(e) => {
+                        eprintln!("Error reading file '{}': {:?}", file_path, e);
                         std::process::exit(1);
                     }
                 };
 
-                match storage.get_block_hash_by_height(height)? {
-                    Some(hash) => {
-                        println!("{{\"height\":{},\"hash\":\"{}\"}}", height, hash);
+                // Local validation to ensure the JSON matches the schema
+                if let Err(e) = serde_json::from_str::<TransactionEnvelope>(&tx_json) {
+                    eprintln!("Error: Transaction file is not a valid JSON TransactionEnvelope: {:?}", e);
+                    std::process::exit(1);
+                }
+
+                match submit_transaction_cli(&tx_json) {
+                    Ok(response_body) => {
+                        println!("{}", response_body.trim());
                         return Ok(());
                     }
-                    None => {
-                        eprintln!("Error: Block not found at height {}", height);
+                    Err(e) => {
+                        eprintln!("Error: Could not connect to the node RPC server at 127.0.0.1:8080.");
+                        eprintln!("Details: {:?}", e);
                         std::process::exit(1);
                     }
                 }
             }
-            "blocks" => {
-                let height = storage.get_chain_height()?.unwrap_or(0);
-                for h in 1..=height {
-                    println!("{}", h);
+            "status" | "block" | "blocks" => {
+                // Open database in read-only mode for inspection subcommands
+                let storage = match Storage::open_read_only(db_path) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("Error opening database in read-only mode: {:?}", e);
+                        eprintln!("Please ensure the node has been started at least once to initialize the database.");
+                        std::process::exit(1);
+                    }
+                };
+
+                match subcommand.as_str() {
+                    "status" => {
+                        let height = storage.get_chain_height()?.unwrap_or(0);
+                        let tip_hash = storage.get_best_block()?
+                            .map(|h| h.to_string())
+                            .unwrap_or_else(|| "none".to_string());
+                        
+                        println!("{{\"height\":{},\"tip\":\"{}\"}}", height, tip_hash);
+                        return Ok(());
+                    }
+                    "block" => {
+                        if args.len() < 3 {
+                            eprintln!("Error: Missing block height. Usage: aruna-node block <height>");
+                            std::process::exit(1);
+                        }
+                        let height_str = &args[2];
+                        let height = match height_str.parse::<u64>() {
+                            Ok(h) => h,
+                            Err(_) => {
+                                eprintln!("Error: Invalid block height '{}'. Must be a non-negative integer.", height_str);
+                                std::process::exit(1);
+                            }
+                        };
+
+                        match storage.get_block_hash_by_height(height)? {
+                            Some(hash) => {
+                                println!("{{\"height\":{},\"hash\":\"{}\"}}", height, hash);
+                                return Ok(());
+                            }
+                            None => {
+                                eprintln!("Error: Block not found at height {}", height);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                    "blocks" => {
+                        let height = storage.get_chain_height()?.unwrap_or(0);
+                        for h in 1..=height {
+                            println!("{}", h);
+                        }
+                        return Ok(());
+                    }
+                    _ => unreachable!(),
                 }
-                return Ok(());
             }
             "help" | "-h" | "--help" => {
-                println!("ARUNA Chain Inspection CLI");
+                println!("ARUNA Chain Inspection & Transaction CLI");
                 println!("Usage:");
                 println!("  aruna-node status        Display current chain height and tip block hash");
                 println!("  aruna-node block <h>     Display the block hash at height <h>");
                 println!("  aruna-node blocks        List all block heights from 1 to the current tip");
+                println!("  aruna-node submit <file> Submit a signed transaction JSON file to the mempool");
                 println!("  aruna-node               Start the full node daemon (default)");
                 return Ok(());
             }
@@ -216,7 +319,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Storage : Opened");
     println!("State   : Initialized\n");
 
-    // 7. Start Block Producer Loop in background (Sprint A & B)
+    // 7. Initialize Mempool
+    let mempool = Arc::new(Mempool::new(50000));
+
+    // 8. Start Block Producer Loop in background (Sprint A & B)
     // Produces a block every 30 seconds, validating it and persisting it to RocksDB.
     let storage_clone = storage.clone();
     let consensus_clone = consensus_engine.clone();
@@ -259,10 +365,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // 8. Start HTTP RPC Server (Sprint C)
+    // 9. Start HTTP RPC Server (Sprint C & Sprint 2)
+    let app_state = AppState {
+        storage: storage.clone(),
+        mempool,
+    };
+
     let app = Router::new()
         .route("/status", get(get_status))
-        .with_state(storage.clone());
+        .route("/tx", post(post_tx))
+        .with_state(app_state);
 
     println!("Starting RPC server on 127.0.0.1:8080...");
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await?;
