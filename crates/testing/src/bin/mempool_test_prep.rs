@@ -1,19 +1,10 @@
-use aruna_primitives::{Address, Hash, Nonce, TransactionPayload, TransactionEnvelope, SignatureType};
-use aruna_storage::Storage;
+use aruna_primitives::{Address, Nonce, TransactionPayload, TransactionEnvelope, SignatureType};
 use aruna_crypto::{Ed25519Keypair, derive_pubkey_hash};
-use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Preparing mempool integration test...");
 
-    // 1. Open the database in read-write mode
-    let db_path = Path::new("./data_sumatera");
-    if !db_path.exists() {
-        return Err("Database does not exist at ./data_sumatera. Run the first startup step first.".into());
-    }
-    let storage = Storage::open(db_path)?;
-
-    // 2. Derive test keypair from a static seed to ensure the address is deterministic
+    // 1. Derive test keypair from a static seed to ensure the address is deterministic
     let seed = [0x42u8; 32];
     let keypair = Ed25519Keypair::from_seed(&seed);
     let pubkey = keypair.public_key_bytes();
@@ -23,12 +14,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sender_bech32 = sender.to_bech32m("sum")?;
     println!("Generated test address: {}", sender_bech32);
 
-    // 3. Inject funded account state into RocksDB (10 ARU = 10,000,000 micro-ARU)
-    let balance = 10_000_000;
-    storage.put_account(&sender, balance, 0, &Hash::zero(), &Hash::zero())?;
-    println!("Injected funded account into database with balance 10,000,000 micro-ARU");
-
-    // 4. Construct a valid signed transaction (nonce 1, sending 1 ARU to a dummy address)
+    // 2. Construct a valid signed transaction (nonce 1, sending 1 ARU to a dummy address)
+    // The sender is pre-funded in the genesis allocations (config/genesis.sumatera.toml).
     let recipient = Address::from_pubkey_hash([0x88; 20]);
     let payload = TransactionPayload {
         nonce: Nonce(1),
@@ -51,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         public_key: pubkey.to_vec(),
     };
 
-    // 5. Serialize to JSON and write to test_tx.json
+    // 3. Serialize to JSON and write to test_tx.json
     let tx_json = serde_json::to_string_pretty(&envelope)?;
     std::fs::write("test_tx.json", tx_json)?;
     println!("Signed test transaction successfully written to test_tx.json");
