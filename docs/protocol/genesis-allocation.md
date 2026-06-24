@@ -10,11 +10,11 @@ This document specifies the initial allocation of ARUNA (ARU) tokens at the Gene
 
 | Allocation Type | Percentage | Amount (ARU) | Mapped Address | Purpose / Constraints |
 | :--- | :--- | :--- | :--- | :--- |
-| **Founder Allocation** | 1.5% | 15,000,000 | `sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqd6ksp9` | Locked in a smart vesting contract. Linearly released over 48 months. No early unlock or governance privilege. |
-| **Treasury** | 5.0% | 50,000,000 | `sumc1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsq9lh6` | Contract address (`sumc1...`). Controlled entirely by on-chain governance; never founder funds. Used for grants, audits, and infrastructure. |
-| **Premine - Pool 1** | 0.5% | 5,000,000 | `sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqquggh0p` | Testnet Rewards & Node bootstrapping incentives. |
-| **Premine - Pool 2** | 0.5% | 5,000,000 | `sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqquucj847` | Initial network infrastructure bootstrapping. |
-| **Premine - Pool 3** | 0.5% | 5,000,000 | `sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqp2e49c` | Liquidity experiments & Security bounties. |
+| **Founder Allocation** | 1.5% | 15,000,000 | `sum1q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9gw3snf` | Locked in a smart vesting contract. Linearly released over 48 months. No early unlock or governance privilege. |
+| **Treasury** | 5.0% | 50,000,000 | `sumc1qszqgpqyqszqgpqyqszqgpqyqszqgpqypa49fy` | Contract address (`sumc1...`). Controlled entirely by on-chain governance; never founder funds. Used for grants, audits, and infrastructure. |
+| **Premine - Pool 1** | 0.5% | 5,000,000 | `sum1qyqszqgpqyqszqgpqyqszqgpqyqszqgpe6sslr` | Testnet Rewards & Node bootstrapping incentives. |
+| **Premine - Pool 2** | 0.5% | 5,000,000 | `sum1qgpqyqszqgpqyqszqgpqyqszqgpqyqszg7k454` | Initial network infrastructure bootstrapping. |
+| **Premine - Pool 3** | 0.5% | 5,000,000 | `sum1qvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcrfwh575` | Liquidity experiments & Security bounties. |
 | **Total** | **8.0%** | **80,000,000** | — | — |
 
 ---

@@ -35,23 +35,23 @@ For the Sumatera Testnet, the initial accounts are mapped to the following Bech3
 
 ### A. Bootstrap Staking Nodes (Premine)
 * **Bootstrap Validator 1:**
-  * *Address:* `sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqquggh0p`
+  * *Address:* `sum1qyqszqgpqyqszqgpqyqszqgpqyqszqgpe6sslr`
   * *Allocation:* 5,000,000 ARU (to establish initial PoS weight).
 * **Bootstrap Validator 2:**
-  * *Address:* `sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqquucj847`
+  * *Address:* `sum1qgpqyqszqgpqyqszqgpqyqszqgpqyqszg7k454`
   * *Allocation:* 5,000,000 ARU.
 * **Faucet and Testing Fund:**
-  * *Address:* `sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqp2e49c`
+  * *Address:* `sum1qvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcrfwh575`
   * *Allocation:* 5,000,000 ARU.
 
 ### B. Network Treasury
 * **Treasury Governance Contract:**
-  * *Address:* `sumc1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsq9lh6`
+  * *Address:* `sumc1qszqgpqyqszqgpqyqszqgpqyqszqgpqypa49fy`
   * *Allocation:* 50,000,000 ARU.
 
 ### C. Founder Lockup
 * **Founder Vesting Contract:**
-  * *Address:* `sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqd6ksp9`
+  * *Address:* `sum1q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9gw3snf`
   * *Allocation:* 15,000,000 ARU.
 
 ---

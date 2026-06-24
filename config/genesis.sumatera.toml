@@ -8,8 +8,8 @@ chain_id = 1
 
 [allocations]
 # Addresses mapped to initial balances in ARU (1 ARU = 1,000,000 micro-ARU)
-"sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqquggh0p" = 5000000
-"sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqquucj847" = 5000000
-"sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqp2e49c" = 5000000
-"sumc1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsq9lh6" = 50000000
-"sum1qyqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqd6ksp9" = 15000000
+"sum1qyqszqgpqyqszqgpqyqszqgpqyqszqgpe6sslr" = 5000000
+"sum1qgpqyqszqgpqyqszqgpqyqszqgpqyqszg7k454" = 5000000
+"sum1qvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcrfwh575" = 5000000
+"sumc1qszqgpqyqszqgpqyqszqgpqyqszqgpqypa49fy" = 50000000
+"sum1q5zs2pg9q5zs2pg9q5zs2pg9q5zs2pg9gw3snf" = 15000000
