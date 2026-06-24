@@ -55,9 +55,26 @@ jobs:
         run: |
           ls -lah data_sumatera/
 
-      - name: Run Node (Second Startup - Milestone C)
+      - name: Run Node (Second Startup & RPC Verification)
         run: |
-          timeout 95s cargo run -p aruna-node > node_recovery.log 2>&1 || true
+          cargo run -p aruna-node > node_recovery.log 2>&1 &
+          NODE_PID=$!
+          echo "Node started in background with PID $NODE_PID"
+          
+          # Wait 92 seconds for blocks 4, 5, and 6 to be produced
+          sleep 92
+          
+          echo "Querying RPC /status endpoint..."
+          curl -s http://127.0.0.1:8080/status > rpc_status.json
+          cat rpc_status.json
+          
+          # Kill the node gracefully
+          kill $NODE_PID || true
+          wait $NODE_PID || true
+          
+          # Verify RPC response
+          grep -q '"network":"sumatera"' rpc_status.json
+          grep -q '"height":6' rpc_status.json
 
       - name: Verify Recovery & Persistence Log
         run: |

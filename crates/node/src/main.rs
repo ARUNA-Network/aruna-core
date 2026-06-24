@@ -8,6 +8,12 @@ use aruna_consensus::ConsensusEngine;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
+use axum::{
+    routing::get,
+    Router,
+    Json,
+    extract::State,
+};
 
 #[derive(Debug, Deserialize)]
 struct GenesisConfig {
@@ -23,7 +29,32 @@ struct GenesisParameters {
     chain_id: u32,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[derive(serde::Serialize)]
+struct StatusResponse {
+    network: String,
+    height: u64,
+}
+
+async fn get_status(
+    State(storage): State<Storage>,
+) -> Result<Json<StatusResponse>, (axum::http::StatusCode, String)> {
+    match storage.get_chain_height() {
+        Ok(maybe_height) => {
+            let height = maybe_height.unwrap_or(0);
+            Ok(Json(StatusResponse {
+                network: "sumatera".to_string(),
+                height,
+            }))
+        }
+        Err(e) => Err((
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {:?}", e),
+        )),
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("ARUNA Core Node starting...");
 
     // 1. Load genesis configuration from TOML file
@@ -42,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4. Initialize StateManager & ConsensusEngine
     let state_manager = StateManager::new(storage.clone());
-    let _consensus_engine = ConsensusEngine::new(state_manager.clone(), storage.clone());
+    let consensus_engine = ConsensusEngine::new(state_manager.clone(), storage.clone());
 
     // 5. Check if Genesis Block (Height 0) is already loaded
     let best_block = storage.get_best_block()?;
@@ -112,29 +143,57 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Storage : Opened");
     println!("State   : Initialized\n");
 
-    // 7. Start Block Producer Loop (Sprint A & B)
+    // 7. Start Block Producer Loop in background (Sprint A & B)
     // Produces a block every 30 seconds, validating it and persisting it to RocksDB.
-    println!("Starting Block Producer loop (30-second interval)...");
-    loop {
-        std::thread::sleep(std::time::Duration::from_secs(30));
-        let current_height = storage.get_chain_height()?.unwrap_or(0);
-        println!("Current Height: {}", current_height);
-
-        match _consensus_engine.produce_block() {
-            Ok(block) => {
-                match _consensus_engine.commit_block(&block) {
-                    Ok(hash) => {
-                        let height = storage.get_chain_height()?.unwrap_or(0);
-                        println!("New Height: {}", height);
-                        println!(
-                            "Block #{} produced | Height: {} | Height={} | Hash: {}",
-                            height, height, height, hash
-                        );
-                    }
-                    Err(e) => eprintln!("Error committing block: {:?}", e),
+    let storage_clone = storage.clone();
+    let consensus_clone = consensus_engine.clone();
+    
+    tokio::spawn(async move {
+        println!("Starting Block Producer loop (30-second interval)...");
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            let current_height = match storage_clone.get_chain_height() {
+                Ok(h) => h.unwrap_or(0),
+                Err(e) => {
+                    eprintln!("Error reading chain height: {:?}", e);
+                    continue;
                 }
+            };
+            println!("Current Height: {}", current_height);
+
+            match consensus_clone.produce_block() {
+                Ok(block) => {
+                    match consensus_clone.commit_block(&block) {
+                        Ok(hash) => {
+                            let height = match storage_clone.get_chain_height() {
+                                Ok(h) => h.unwrap_or(0),
+                                Err(e) => {
+                                    eprintln!("Error reading chain height: {:?}", e);
+                                    continue;
+                                }
+                            };
+                            println!("New Height: {}", height);
+                            println!(
+                                "Block #{} produced | Height: {} | Height={} | Hash: {}",
+                                height, height, height, hash
+                            );
+                        }
+                        Err(e) => eprintln!("Error committing block: {:?}", e),
+                    }
+                }
+                Err(e) => eprintln!("Error producing block: {:?}", e),
             }
-            Err(e) => eprintln!("Error producing block: {:?}", e),
         }
-    }
+    });
+
+    // 8. Start HTTP RPC Server (Sprint C)
+    let app = Router::new()
+        .route("/status", get(get_status))
+        .with_state(storage.clone());
+
+    println!("Starting RPC server on 127.0.0.1:8080...");
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
 }
