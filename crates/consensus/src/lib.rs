@@ -1,7 +1,7 @@
 //! Consensus validation engine for the ARUNA Network.
 //! Conforms to specifications defined in docs/protocol/consensus.md, block.md, and transaction.md.
 
-use aruna_primitives::{Block, BlockHeader, BlockBody, TransactionEnvelope, Hash, serialize, SignatureType};
+use aruna_primitives::{Block, BlockHeader, BlockBody, TransactionEnvelope, Hash, serialize, SignatureType, Address};
 use aruna_state::{StateManager, StateError};
 use aruna_storage::{Storage, StorageBatch, StorageError};
 use aruna_crypto::{CryptoError, Ed25519Verifier, derive_pubkey_hash};
@@ -50,8 +50,8 @@ impl ConsensusEngine {
         }
     }
 
-    /// Produces a new block extending the current best block tip.
-    pub fn produce_block(&self) -> Result<Block, ConsensusError> {
+    /// Produces a new block extending the current best block tip with a list of transactions.
+    pub fn produce_block(&self, transactions: Vec<TransactionEnvelope>) -> Result<Block, ConsensusError> {
         let best_hash = self.storage.get_best_block()?
             .ok_or_else(|| ConsensusError::Validation("No best block found".to_string()))?;
         let best_header = self.storage.get_block_header(&best_hash)?
@@ -66,21 +66,23 @@ impl ConsensusEngine {
             timestamp = best_header.timestamp + 1;
         }
 
+        let body = BlockBody {
+            transactions,
+            validator_metadata: vec![],
+            ecosystem_metadata: vec![],
+        };
+
+        let merkle_root = Self::calculate_merkle_root(&body.transactions)?;
+
         let header = BlockHeader {
             version: 1,
             prev_block_hash: best_hash,
-            merkle_root: Hash::zero(),
+            merkle_root,
             timestamp,
             difficulty: best_header.difficulty,
             nonce: 0,
             validator_root: Hash::zero(),
             treasury_root: Hash::zero(),
-        };
-
-        let body = BlockBody {
-            transactions: vec![],
-            validator_metadata: vec![],
-            ecosystem_metadata: vec![],
         };
 
         let block = Block { header, body };
@@ -91,24 +93,124 @@ impl ConsensusEngine {
         Ok(block)
     }
 
-    /// Commits a block to the RocksDB database, updating best block tips and height indexes.
+    /// Commits a block to the RocksDB database, executing its transactions, updating ledger state, and distributing rewards.
     pub fn commit_block(&self, block: &Block) -> Result<Hash, ConsensusError> {
+        // 1. Serialize block header and calculate block hash
         let header_bytes = serialize(&block.header)
             .map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
         let block_hash = aruna_crypto::blake3_hash(&header_bytes);
 
-        self.storage.put_block_header(&block_hash, &block.header)?;
-        self.storage.put_block_body(&block_hash, &block.body)?;
+        // 2. Open a storage batch
+        let mut batch = StorageBatch::new();
 
+        // 3. Keep a cache of modified accounts to prevent overwriting updates
+        let mut account_cache = std::collections::HashMap::new();
+
+        // Local closure to get account from cache or database
+        let mut get_account_local = |addr: &Address| -> Result<aruna_state::Account, ConsensusError> {
+            if let Some(acc) = account_cache.get(addr) {
+                Ok(acc.clone())
+            } else {
+                let acc = self.state_manager.get_account(addr)?
+                    .unwrap_or_else(|| aruna_state::Account::new(0, aruna_primitives::Nonce::zero()));
+                Ok(acc)
+            }
+        };
+
+        // 4. Execute all transactions in the block body
+        for tx in &block.body.transactions {
+            let sender_addr = tx.payload.sender;
+            let recipient_addr = tx.payload.recipient;
+
+            let mut sender = get_account_local(&sender_addr)?;
+            let mut recipient = get_account_local(&recipient_addr)?;
+
+            // Validate Nonce
+            let expected_nonce = sender.nonce.increment();
+            if tx.payload.nonce != expected_nonce {
+                return Err(ConsensusError::Validation(format!(
+                    "Nonce mismatch for sender {:?}: expected {:?}, got {:?}",
+                    sender_addr, expected_nonce, tx.payload.nonce
+                )));
+            }
+
+            // Validate Balance
+            let total_required = tx.payload.amount.checked_add(tx.payload.fee)
+                .ok_or_else(|| ConsensusError::Validation("Transaction amount/fee overflow".to_string()))?;
+            
+            if sender.balance < total_required {
+                return Err(ConsensusError::Validation(format!(
+                    "Insufficient balance for sender {:?}: has {}, requires {}",
+                    sender_addr, sender.balance, total_required
+                )));
+            }
+
+            // Apply state changes to cache
+            sender.balance -= total_required;
+            sender.nonce = tx.payload.nonce;
+
+            recipient.balance = recipient.balance.checked_add(tx.payload.amount)
+                .ok_or_else(|| ConsensusError::Validation("Recipient balance overflow".to_string()))?;
+
+            account_cache.insert(sender_addr, sender);
+            account_cache.insert(recipient_addr, recipient);
+        }
+
+        // 5. Distribute block rewards and accumulated fees
         let current_height = self.storage.get_chain_height()?.unwrap_or(0);
         let new_height = current_height + 1;
 
-        self.storage.put_block_height_map(new_height, &block_hash)?;
+        let total_fees: u64 = block.body.transactions.iter().map(|tx| tx.payload.fee).sum();
+        let (miner_reward, validator_reward, treasury_reward) = Self::calculate_reward(new_height);
+
+        // Miner 70%, Validator 25%, Treasury 5%
+        let total_miner_payout = miner_reward + (total_fees * 70 / 100);
+        let total_validator_payout = validator_reward + (total_fees * 25 / 100);
+        
+        let total_pool = miner_reward + validator_reward + treasury_reward + total_fees;
+        let total_treasury_payout = total_pool - total_miner_payout - total_validator_payout;
+
+        // Resolve system addresses
+        let (_, miner_addr) = Address::from_bech32m("sum1qyqszqgpqyqszqgpqyqszqgpqyqszqgpe6sslr").unwrap();
+        let (_, validator_addr) = Address::from_bech32m("sum1qgpqyqszqgpqyqszqgpqyqszqgpqyqszg7k454").unwrap();
+        let (_, treasury_addr) = Address::from_bech32m("sumc1qszqgpqyqszqgpqyqszqgpqyqszqgpqypa49fy").unwrap();
+
+        // Credit Miner
+        let mut miner = get_account_local(&miner_addr)?;
+        miner.balance = miner.balance.checked_add(total_miner_payout)
+            .ok_or_else(|| ConsensusError::Validation("Miner balance overflow".to_string()))?;
+        account_cache.insert(miner_addr, miner);
+
+        // Credit Validator
+        let mut validator = get_account_local(&validator_addr)?;
+        validator.balance = validator.balance.checked_add(total_validator_payout)
+            .ok_or_else(|| ConsensusError::Validation("Validator balance overflow".to_string()))?;
+        account_cache.insert(validator_addr, validator);
+
+        // Credit Treasury
+        let mut treasury = get_account_local(&treasury_addr)?;
+        treasury.balance = treasury.balance.checked_add(total_treasury_payout)
+            .ok_or_else(|| ConsensusError::Validation("Treasury balance overflow".to_string()))?;
+        account_cache.insert(treasury_addr, treasury);
+
+        // 6. Write all modified accounts back to the storage batch
+        for (addr, acc) in account_cache {
+            batch.put_account(&addr, acc.balance, acc.nonce.0, &acc.code_hash, &acc.storage_root);
+        }
+
+        // 7. Write block header, body, and height mapping to storage batch
+        batch.put_block_height_map(new_height, &block_hash);
+
+        // 8. Commit storage batch atomically
+        self.storage.write_batch(batch)?;
+
+        // 9. Update tip metadata indexes
+        self.storage.put_block_header(&block_hash, &block.header)?;
+        self.storage.put_block_body(&block_hash, &block.body)?;
         self.storage.put_best_block(&block_hash)?;
         self.storage.put_chain_height(new_height)?;
 
         Ok(block_hash)
-    }
 
     /// Calculate the block reward splits (Miner 70%, Validator 25%, Treasury 5%)
     /// incorporating the 4-year halving interval (4,204,800 blocks).

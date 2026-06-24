@@ -326,11 +326,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Produces a block every 30 seconds, validating it and persisting it to RocksDB.
     let storage_clone = storage.clone();
     let consensus_clone = consensus_engine.clone();
+    let mempool_clone = mempool.clone();
     
     tokio::spawn(async move {
         println!("Starting Block Producer loop (30-second interval)...");
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            
+            // 1. Fetch pending transactions from mempool
+            let txs = mempool_clone.get_pending_transactions(100);
+            
             let current_height = match storage_clone.get_chain_height() {
                 Ok(h) => h.unwrap_or(0),
                 Err(e) => {
@@ -340,10 +345,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             println!("Current Height: {}", current_height);
 
-            match consensus_clone.produce_block() {
+            match consensus_clone.produce_block(txs) {
                 Ok(block) => {
+                    let tx_count = block.body.transactions.len();
                     match consensus_clone.commit_block(&block) {
                         Ok(hash) => {
+                            // 2. Evict committed transactions from the mempool
+                            let committed_hashes: Vec<Hash> = block.body.transactions.iter().map(|tx| {
+                                let bytes = aruna_primitives::serialize(tx).unwrap();
+                                aruna_crypto::blake3_hash(&bytes)
+                            }).collect();
+                            mempool_clone.remove_transactions(&committed_hashes);
+                            
                             let height = match storage_clone.get_chain_height() {
                                 Ok(h) => h.unwrap_or(0),
                                 Err(e) => {
@@ -353,8 +366,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             };
                             println!("New Height: {}", height);
                             println!(
-                                "Block #{} produced | Height: {} | Height={} | Hash: {}",
-                                height, height, height, hash
+                                "Block #{} produced with {} transactions | Height: {} | Height={} | Hash: {}",
+                                height, tx_count, height, height, hash
                             );
                         }
                         Err(e) => eprintln!("Error committing block: {:?}", e),

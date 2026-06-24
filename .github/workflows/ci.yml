@@ -95,9 +95,9 @@ jobs:
         run: |
           cat node_recovery.log
           grep -q "Genesis already initialized. Loading existing ledger state" node_recovery.log
-          grep -q "Block #4 produced" node_recovery.log
-          grep -q "Block #5 produced" node_recovery.log
-          grep -q "Block #6 produced" node_recovery.log
+          grep -q "Block #4 produced with 1 transactions" node_recovery.log
+          grep -q "Block #5 produced with 0 transactions" node_recovery.log
+          grep -q "Block #6 produced with 0 transactions" node_recovery.log
           grep -q "Height: 4" node_recovery.log
           grep -q "Height: 5" node_recovery.log
           grep -q "Height: 6" node_recovery.log
