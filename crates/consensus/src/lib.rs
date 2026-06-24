@@ -59,7 +59,6 @@ impl ConsensusEngine {
         let current_height = self.storage.get_chain_height()?
             .ok_or_else(|| ConsensusError::Validation("Chain height not found".to_string()))?;
 
-        let new_height = current_height + 1;
         let mut timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
