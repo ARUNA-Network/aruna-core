@@ -1,7 +1,7 @@
 //! Consensus validation engine for the ARUNA Network.
 //! Conforms to specifications defined in docs/protocol/consensus.md, block.md, and transaction.md.
 
-use aruna_primitives::{Block, BlockHeader, TransactionEnvelope, Hash, serialize, SignatureType};
+use aruna_primitives::{Block, BlockHeader, BlockBody, TransactionEnvelope, Hash, serialize, SignatureType};
 use aruna_state::{StateManager, StateError};
 use aruna_storage::{Storage, StorageBatch, StorageError};
 use aruna_crypto::{CryptoError, Ed25519Verifier, derive_pubkey_hash};
