@@ -100,6 +100,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         storage.put_chain_height(0)?;
         storage.put_finalized_block(&genesis_hash)?;
         storage.put_chain_id(config.genesis.chain_id)?;
+    } else {
+        println!("Genesis already initialized. Loading existing ledger state...");
     }
 
     // 6. Print Node Successful initialization banner

@@ -27,3 +27,34 @@ jobs:
 
       - name: Cargo Test
         run: cargo test --workspace
+
+      - name: Build Aruna Node
+        run: cargo build -p aruna-node
+
+      - name: Run Node (First Startup - Milestone B)
+        run: |
+          timeout 15s cargo run -p aruna-node > node_startup.log 2>&1 || true
+
+      - name: Verify First Startup Log
+        run: |
+          cat node_startup.log
+          grep "Initializing new ledger state from genesis config" node_startup.log
+          grep "ARUNA Node Started" node_startup.log
+          grep "Genesis : Loaded" node_startup.log
+          grep "Storage : Opened" node_startup.log
+          grep "State   : Initialized" node_startup.log
+
+      - name: Verify RocksDB Database Created
+        run: |
+          ls -lah data_sumatera/
+
+      - name: Run Node (Second Startup - Milestone C)
+        run: |
+          timeout 15s cargo run -p aruna-node > node_recovery.log 2>&1 || true
+
+      - name: Verify Recovery Log
+        run: |
+          cat node_recovery.log
+          grep "Genesis already initialized. Loading existing ledger state" node_recovery.log
+          ! grep "Initializing new ledger state from genesis config" node_recovery.log
+
