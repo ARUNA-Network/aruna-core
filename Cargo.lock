@@ -122,6 +122,7 @@ dependencies = [
  "aruna-state",
  "aruna-storage",
  "axum",
+ "hex",
  "serde",
  "serde_json",
  "thiserror",

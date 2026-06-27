@@ -1,12 +1,9 @@
 //! ARUNA core node runner.
 //! Loads genesis configuration from toml file, initializes RocksDB storage, and verifies ledger state.
 
-mod cli;
-mod rpc;
-mod bootstrap;
-mod runtime;
-
-use cli::{CliConfig, CliCommand};
+use aruna_node::cli::{self, CliConfig, CliCommand};
+use aruna_node::bootstrap;
+use aruna_node::runtime;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
