@@ -99,23 +99,15 @@ impl ConsensusEngine {
         Ok(block)
     }
 
-    /// Commits a block to the RocksDB database, executing its transactions, updating ledger state, and distributing rewards.
-    pub fn commit_block(&self, block: &Block) -> Result<Hash, ConsensusError> {
-        // Dry-run validate the block state transitions and consensus criteria
-        self.validate_block(block)?;
+    /// Calculate work from compact difficulty (Sumatera Testnet is constant, returns 1).
+    pub fn block_work(_difficulty: aruna_primitives::Difficulty) -> u128 {
+        1
+    }
 
-        // 1. Serialize block header and calculate block hash
-        let header_bytes = serialize(&block.header)
-            .map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
-        let block_hash = aruna_crypto::blake3_hash(&header_bytes);
-
-        // 2. Open a storage batch
-        let mut batch = StorageBatch::new();
-
-        // 3. Keep a cache of modified accounts to prevent overwriting updates
+    /// Appled block transitions and rewards, writing them to StorageBatch and returning computed state root.
+    pub fn apply_block_state(&self, block: &Block, batch: &mut StorageBatch) -> Result<Hash, ConsensusError> {
         let mut account_cache: std::collections::HashMap<Address, aruna_state::Account> = std::collections::HashMap::new();
 
-        // Local helper closure to get account from cache or database (without capturing to satisfy borrow checker)
         let get_account_local = |addr: &Address, cache: &std::collections::HashMap<Address, aruna_state::Account>, state_mgr: &StateManager| -> Result<aruna_state::Account, ConsensusError> {
             if let Some(acc) = cache.get(addr) {
                 Ok(acc.clone())
@@ -126,7 +118,7 @@ impl ConsensusEngine {
             }
         };
 
-        // 4. Execute all transactions in the block body
+        // 1. Execute all transactions
         for (tx_idx, tx) in block.body.transactions.iter().enumerate() {
             let sender_addr = tx.payload.sender;
             let recipient_addr = tx.payload.recipient;
@@ -134,7 +126,6 @@ impl ConsensusEngine {
             let mut sender = get_account_local(&sender_addr, &account_cache, &self.state_manager)?;
             let mut recipient = get_account_local(&recipient_addr, &account_cache, &self.state_manager)?;
 
-            // Validate Nonce
             let expected_nonce = sender.nonce.increment();
             if tx.payload.nonce != expected_nonce {
                 return Err(ConsensusError::Validation(format!(
@@ -143,7 +134,6 @@ impl ConsensusEngine {
                 )));
             }
 
-            // Validate Balance
             let total_required = tx.payload.amount.checked_add(tx.payload.fee)
                 .ok_or_else(|| ConsensusError::Validation("Transaction amount/fee overflow".to_string()))?;
             
@@ -154,7 +144,6 @@ impl ConsensusEngine {
                 )));
             }
 
-            // Apply state changes to cache
             sender.balance -= total_required;
             sender.nonce = tx.payload.nonce;
 
@@ -164,67 +153,368 @@ impl ConsensusEngine {
             account_cache.insert(sender_addr, sender);
             account_cache.insert(recipient_addr, recipient);
 
-            // Index transaction location: tx_hash -> (block_hash, tx_index)
+            // Index transaction
             let tx_bytes = serialize(tx)
                 .map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
             let tx_hash = aruna_crypto::blake3_hash(&tx_bytes);
+            let header_bytes = serialize(&block.header)
+                .map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
+            let block_hash = aruna_crypto::blake3_hash(&header_bytes);
             batch.put_tx_index(&tx_hash, &block_hash, tx_idx as u32);
         }
 
-        // 5. Distribute block rewards and accumulated fees
-        let current_height = self.storage.get_chain_height()?.unwrap_or(0);
-        let new_height = current_height + 1;
+        // 2. Distribute block rewards
+        let new_height = if block.header.prev_block_hash == Hash::zero() {
+            0
+        } else {
+            let parent_height = self.storage.get_block_height_by_hash(&block.header.prev_block_hash)?
+                .ok_or_else(|| ConsensusError::Validation(format!("Parent block height missing for hash {:?}", block.header.prev_block_hash)))?;
+            parent_height + 1
+        };
 
         let total_fees: u64 = block.body.transactions.iter().map(|tx| tx.payload.fee).sum();
         let (miner_reward, validator_reward, treasury_reward) = Self::calculate_reward(new_height);
 
-        // Miner 70%, Validator 25%, Treasury 5%
         let total_miner_payout = miner_reward + (total_fees * 70 / 100);
         let total_validator_payout = validator_reward + (total_fees * 25 / 100);
         
         let total_pool = miner_reward + validator_reward + treasury_reward + total_fees;
         let total_treasury_payout = total_pool - total_miner_payout - total_validator_payout;
 
-        // Resolve system addresses
         let (_, miner_addr) = Address::from_bech32m("sum1qyqszqgpqyqszqgpqyqszqgpqyqszqgpe6sslr").unwrap();
         let (_, validator_addr) = Address::from_bech32m("sum1qgpqyqszqgpqyqszqgpqyqszqgpqyqszg7k454").unwrap();
         let (_, treasury_addr) = Address::from_bech32m("sumc1qszqgpqyqszqgpqyqszqgpqyqszqgpqypa49fy").unwrap();
 
-        // Credit Miner
         let mut miner = get_account_local(&miner_addr, &account_cache, &self.state_manager)?;
         miner.balance = miner.balance.checked_add(total_miner_payout)
             .ok_or_else(|| ConsensusError::Validation("Miner balance overflow".to_string()))?;
         account_cache.insert(miner_addr, miner);
 
-        // Credit Validator
         let mut validator = get_account_local(&validator_addr, &account_cache, &self.state_manager)?;
         validator.balance = validator.balance.checked_add(total_validator_payout)
             .ok_or_else(|| ConsensusError::Validation("Validator balance overflow".to_string()))?;
         account_cache.insert(validator_addr, validator);
 
-        // Credit Treasury
         let mut treasury = get_account_local(&treasury_addr, &account_cache, &self.state_manager)?;
         treasury.balance = treasury.balance.checked_add(total_treasury_payout)
             .ok_or_else(|| ConsensusError::Validation("Treasury balance overflow".to_string()))?;
         account_cache.insert(treasury_addr, treasury);
 
-        // 6. Write all modified accounts back to the storage batch
+        // Write modified accounts to batch
+        for (addr, acc) in &account_cache {
+            batch.put_account(addr, acc.balance, acc.nonce.0, &acc.code_hash, &acc.storage_root);
+        }
+
+        // Calculate expected state root
+        let parent_state_root = if block.header.prev_block_hash == Hash::zero() {
+            Hash::zero()
+        } else {
+            let parent_header = self.storage.get_block_header(&block.header.prev_block_hash)?
+                .ok_or_else(|| ConsensusError::Validation(format!("Parent block header missing for hash {:?}", block.header.prev_block_hash)))?;
+            parent_header.state_root
+        };
+
+        Self::compute_state_root_from_updates(parent_state_root, &account_cache)
+    }
+
+    /// Reverts the state transitions of a block, updating account balances and nonces backwards.
+    pub fn rollback_block(&self, block: &Block, batch: &mut StorageBatch) -> Result<(), ConsensusError> {
+        let mut account_cache: std::collections::HashMap<Address, aruna_state::Account> = std::collections::HashMap::new();
+
+        let get_account_local = |addr: &Address, cache: &std::collections::HashMap<Address, aruna_state::Account>, state_mgr: &StateManager| -> Result<aruna_state::Account, ConsensusError> {
+            if let Some(acc) = cache.get(addr) {
+                Ok(acc.clone())
+            } else {
+                let acc = state_mgr.get_account(addr)?
+                    .unwrap_or_else(|| aruna_state::Account::new(0, aruna_primitives::Nonce::zero()));
+                Ok(acc)
+            }
+        };
+
+        // 1. Revert all transactions in the block in REVERSE order
+        for tx in block.body.transactions.iter().rev() {
+            let sender_addr = tx.payload.sender;
+            let recipient_addr = tx.payload.recipient;
+
+            let mut sender = get_account_local(&sender_addr, &account_cache, &self.state_manager)?;
+            let mut recipient = get_account_local(&recipient_addr, &account_cache, &self.state_manager)?;
+
+            let total_required = tx.payload.amount.checked_add(tx.payload.fee)
+                .ok_or_else(|| ConsensusError::Validation("Transaction amount/fee overflow".to_string()))?;
+
+            sender.balance = sender.balance.checked_add(total_required)
+                .ok_or_else(|| ConsensusError::Validation("Rollback sender balance overflow".to_string()))?;
+            sender.nonce = aruna_primitives::Nonce(tx.payload.nonce.0.saturating_sub(1));
+
+            recipient.balance = recipient.balance.checked_sub(tx.payload.amount)
+                .ok_or_else(|| ConsensusError::Validation("Rollback recipient balance underflow".to_string()))?;
+
+            account_cache.insert(sender_addr, sender);
+            account_cache.insert(recipient_addr, recipient);
+        }
+
+        // 2. Revert rewards
+        let header_bytes = serialize(&block.header)
+            .map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
+        let block_hash = aruna_crypto::blake3_hash(&header_bytes);
+
+        let block_height = self.storage.get_block_height_by_hash(&block_hash)?
+            .ok_or_else(|| ConsensusError::Validation("Block height index missing during rollback".to_string()))?;
+
+        let total_fees: u64 = block.body.transactions.iter().map(|tx| tx.payload.fee).sum();
+        let (miner_reward, validator_reward, treasury_reward) = Self::calculate_reward(block_height);
+
+        let total_miner_payout = miner_reward + (total_fees * 70 / 100);
+        let total_validator_payout = validator_reward + (total_fees * 25 / 100);
+        
+        let total_pool = miner_reward + validator_reward + treasury_reward + total_fees;
+        let total_treasury_payout = total_pool - total_miner_payout - total_validator_payout;
+
+        let (_, miner_addr) = Address::from_bech32m("sum1qyqszqgpqyqszqgpqyqszqgpqyqszqgpe6sslr").unwrap();
+        let (_, validator_addr) = Address::from_bech32m("sum1qgpqyqszqgpqyqszqgpqyqszqgpqyqszg7k454").unwrap();
+        let (_, treasury_addr) = Address::from_bech32m("sumc1qszqgpqyqszqgpqyqszqgpqyqszqgpqypa49fy").unwrap();
+
+        let mut miner = get_account_local(&miner_addr, &account_cache, &self.state_manager)?;
+        miner.balance = miner.balance.checked_sub(total_miner_payout)
+            .ok_or_else(|| ConsensusError::Validation("Rollback miner balance underflow".to_string()))?;
+        account_cache.insert(miner_addr, miner);
+
+        let mut validator = get_account_local(&validator_addr, &account_cache, &self.state_manager)?;
+        validator.balance = validator.balance.checked_sub(total_validator_payout)
+            .ok_or_else(|| ConsensusError::Validation("Rollback validator balance underflow".to_string()))?;
+        account_cache.insert(validator_addr, validator);
+
+        let mut treasury = get_account_local(&treasury_addr, &account_cache, &self.state_manager)?;
+        treasury.balance = treasury.balance.checked_sub(total_treasury_payout)
+            .ok_or_else(|| ConsensusError::Validation("Rollback treasury balance underflow".to_string()))?;
+        account_cache.insert(treasury_addr, treasury);
+
+        // 3. Write updates to batch
         for (addr, acc) in account_cache {
             batch.put_account(&addr, acc.balance, acc.nonce.0, &acc.code_hash, &acc.storage_root);
         }
 
-        // 7. Write block header, body, height mapping, and hash-to-height mapping to storage batch
-        batch.put_block_height_map(new_height, &block_hash);
-        batch.put_block_height_by_hash(&block_hash, new_height);
+        Ok(())
+    }
 
-        // 8. Commit storage batch atomically
-        self.storage.write_batch(batch)?;
+    /// Commits a block to the RocksDB database, resolving forks using the Fork Choice Rule (FCR).
+    pub fn commit_block(&self, block: &Block) -> Result<Hash, ConsensusError> {
+        let header_bytes = serialize(&block.header)
+            .map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
+        let block_hash = aruna_crypto::blake3_hash(&header_bytes);
 
-        // 9. Update tip metadata indexes
-        self.storage.put_block_header(&block_hash, &block.header)?;
-        self.storage.put_block_body(&block_hash, &block.body)?;
-        self.storage.put_best_block(&block_hash)?;
-        self.storage.put_chain_height(new_height)?;
+        // Retrieve parent's cumulative difficulty
+        let parent_cum_diff = if block.header.prev_block_hash == Hash::zero() {
+            0_u128
+        } else {
+            self.storage.get_cumulative_difficulty(&block.header.prev_block_hash)?
+                .ok_or_else(|| ConsensusError::Validation(format!(
+                    "Parent cumulative difficulty missing for hash {:?}", block.header.prev_block_hash
+                )))?
+        };
+
+        let new_cum_diff = parent_cum_diff + Self::block_work(block.header.difficulty);
+
+        // Fetch best block's cumulative difficulty
+        let best_hash = self.storage.get_best_block()?.unwrap_or(Hash::zero());
+        let best_cum_diff = if best_hash == Hash::zero() {
+            0_u128
+        } else {
+            self.storage.get_cumulative_difficulty(&best_hash)?
+                .unwrap_or(0)
+        };
+
+        // Determine if this block extends/replaces the canonical tip (higher work)
+        if new_cum_diff > best_cum_diff {
+            if block.header.prev_block_hash == best_hash {
+                // Case 1: Normal extension of canonical tip (Fast path)
+                self.validate_block(block)?;
+
+                let mut batch = StorageBatch::new();
+                let state_root = self.apply_block_state(block, &mut batch)?;
+                if state_root != block.header.state_root {
+                    return Err(ConsensusError::Validation(format!(
+                        "State root mismatch: expected {:?}, got {:?}",
+                        block.header.state_root, state_root
+                    )));
+                }
+
+                let current_height = self.storage.get_chain_height()?.unwrap_or(0);
+                let new_height = if block.header.prev_block_hash == Hash::zero() { 0 } else { current_height + 1 };
+
+                batch.put_block_height_map(new_height, &block_hash);
+                batch.put_block_height_by_hash(&block_hash, new_height);
+                batch.put_cumulative_difficulty(&block_hash, new_cum_diff);
+
+                self.storage.write_batch(batch)?;
+
+                self.storage.put_block_header(&block_hash, &block.header)?;
+                self.storage.put_block_body(&block_hash, &block.body)?;
+                self.storage.put_best_block(&block_hash)?;
+                self.storage.put_chain_height(new_height)?;
+            } else {
+                // Case 2: Chain Reorganization (FCR switch to heavier fork)
+                println!("Fork choice rule: heavier chain fork detected. Starting reorganization...");
+
+                let mut disconnect_path = Vec::new();
+                let mut connect_path = Vec::new();
+
+                let mut curr_disconnect = best_hash;
+                let mut curr_connect = block.header.prev_block_hash;
+
+                let mut height_disconnect = self.storage.get_block_height_by_hash(&curr_disconnect)?
+                    .ok_or_else(|| ConsensusError::Validation("Tip height missing".to_string()))?;
+                let mut height_connect = self.storage.get_block_height_by_hash(&curr_connect)?
+                    .ok_or_else(|| ConsensusError::Validation("Fork parent height missing".to_string()))?;
+
+                while height_disconnect > height_connect {
+                    let header = self.storage.get_block_header(&curr_disconnect)?
+                        .ok_or_else(|| ConsensusError::Validation("Header missing".to_string()))?;
+                    disconnect_path.push((curr_disconnect, header));
+                    curr_disconnect = disconnect_path.last().unwrap().1.prev_block_hash;
+                    height_disconnect -= 1;
+                }
+
+                while height_connect > height_disconnect {
+                    let header = self.storage.get_block_header(&curr_connect)?
+                        .ok_or_else(|| ConsensusError::Validation("Header missing".to_string()))?;
+                    connect_path.push((curr_connect, header));
+                    curr_connect = connect_path.last().unwrap().1.prev_block_hash;
+                    height_connect -= 1;
+                }
+
+                while curr_disconnect != curr_connect && curr_disconnect != Hash::zero() {
+                    let header_d = self.storage.get_block_header(&curr_disconnect)?
+                        .ok_or_else(|| ConsensusError::Validation("Header missing".to_string()))?;
+                    disconnect_path.push((curr_disconnect, header_d));
+                    curr_disconnect = disconnect_path.last().unwrap().1.prev_block_hash;
+
+                    let header_c = self.storage.get_block_header(&curr_connect)?
+                        .ok_or_else(|| ConsensusError::Validation("Header missing".to_string()))?;
+                    connect_path.push((curr_connect, header_c));
+                    curr_connect = connect_path.last().unwrap().1.prev_block_hash;
+                }
+
+                let mut connect_blocks = Vec::new();
+                for (hash, header) in connect_path.into_iter().rev() {
+                    let body = self.storage.get_block_body(&hash)?
+                        .ok_or_else(|| ConsensusError::Validation("Body missing".to_string()))?;
+                    connect_blocks.push(Block { header, body });
+                }
+                connect_blocks.push(block.clone());
+
+                self.storage.put_block_header(&block_hash, &block.header)?;
+                self.storage.put_block_body(&block_hash, &block.body)?;
+                self.storage.put_cumulative_difficulty(&block_hash, new_cum_diff)?;
+
+                // Perform state rollback block-by-block to ensure correct account state reads
+                for (hash, header) in &disconnect_path {
+                    let body = self.storage.get_block_body(hash)?
+                        .ok_or_else(|| ConsensusError::Validation("Body missing".to_string()))?;
+                    let mut rollback_batch = StorageBatch::new();
+                    self.rollback_block(&Block { header: header.clone(), body }, &mut rollback_batch)?;
+                    self.storage.write_batch(rollback_batch)?;
+                }
+
+                let mut applied_blocks = Vec::new();
+                let mut success = true;
+                let mut validation_err = None;
+
+                for reorg_block in &connect_blocks {
+                    let r_bytes = serialize(&reorg_block.header).unwrap();
+                    let r_hash = aruna_crypto::blake3_hash(&r_bytes);
+
+                    if let Err(e) = self.validate_block(reorg_block) {
+                        success = false;
+                        validation_err = Some(e);
+                        break;
+                    }
+
+                    let mut apply_batch = StorageBatch::new();
+                    match self.apply_block_state(reorg_block, &mut apply_batch) {
+                        Ok(state_root) => {
+                            if state_root != reorg_block.header.state_root {
+                                success = false;
+                                validation_err = Some(ConsensusError::Validation(format!(
+                                    "State root mismatch on fork block: expected {:?}, got {:?}",
+                                    reorg_block.header.state_root, state_root
+                                )));
+                                break;
+                            }
+
+                            let parent_height = if reorg_block.header.prev_block_hash == Hash::zero() {
+                                0
+                            } else {
+                                self.storage.get_block_height_by_hash(&reorg_block.header.prev_block_hash)?.unwrap_or(0)
+                            };
+                            let r_height = if reorg_block.header.prev_block_hash == Hash::zero() { 0 } else { parent_height + 1 };
+
+                            apply_batch.put_block_height_map(r_height, &r_hash);
+                            apply_batch.put_block_height_by_hash(&r_hash, r_height);
+
+                            let r_parent_cum_diff = if reorg_block.header.prev_block_hash == Hash::zero() {
+                                0
+                            } else {
+                                self.storage.get_cumulative_difficulty(&reorg_block.header.prev_block_hash)?.unwrap_or(0)
+                            };
+                            let r_cum_diff = r_parent_cum_diff + Self::block_work(reorg_block.header.difficulty);
+                            apply_batch.put_cumulative_difficulty(&r_hash, r_cum_diff);
+
+                            self.storage.write_batch(apply_batch)?;
+                            applied_blocks.push((r_hash, reorg_block.clone(), r_height));
+                        }
+                        Err(e) => {
+                            success = false;
+                            validation_err = Some(e);
+                            break;
+                        }
+                    }
+                }
+
+                if success {
+                    let (final_hash, _, final_height) = applied_blocks.last().unwrap();
+                    self.storage.put_best_block(final_hash)?;
+                    self.storage.put_chain_height(*final_height)?;
+                    println!("Reorganization complete! Canonical tip switched to {} at height {}", final_hash, final_height);
+                } else {
+                    println!("Reorganization failed: {:?}. Restoring original chain state...", validation_err);
+
+                    let mut restore_rollback_batch = StorageBatch::new();
+                    for (_, b, _) in applied_blocks.iter().rev() {
+                        self.rollback_block(b, &mut restore_rollback_batch)?;
+                    }
+                    self.storage.write_batch(restore_rollback_batch)?;
+
+                    for (hash, header) in disconnect_path.iter().rev() {
+                        let body = self.storage.get_block_body(hash)?
+                            .ok_or_else(|| ConsensusError::Validation("Body missing".to_string()))?;
+                        let mut restore_apply_batch = StorageBatch::new();
+                        self.apply_block_state(&Block { header: header.clone(), body }, &mut restore_apply_batch)?;
+                        self.storage.write_batch(restore_apply_batch)?;
+                    }
+
+                    return Err(validation_err.unwrap());
+                }
+            }
+        } else {
+            // Case 3: Side-chain Storage (lighter branch block)
+            println!("Received block on a lighter branch (cumulative difficulty {} <= canonical {}). Storing as side-chain.", new_cum_diff, best_cum_diff);
+            
+            self.validate_block_header_only(block)?;
+
+            self.storage.put_block_header(&block_hash, &block.header)?;
+            self.storage.put_block_body(&block_hash, &block.body)?;
+            self.storage.put_cumulative_difficulty(&block_hash, new_cum_diff)?;
+
+            let parent_height = if block.header.prev_block_hash == Hash::zero() {
+                0
+            } else {
+                self.storage.get_block_height_by_hash(&block.header.prev_block_hash)?
+                    .unwrap_or(0)
+            };
+            let side_height = if block.header.prev_block_hash == Hash::zero() { 0 } else { parent_height + 1 };
+            self.storage.put_block_height_by_hash(&block_hash, side_height)?;
+        }
 
         Ok(block_hash)
     }
@@ -279,9 +569,8 @@ impl ConsensusEngine {
         Ok(leaves[0])
     }
 
-    /// Validates a single transaction, including cryptographic signatures and ledger account states.
-    pub fn validate_transaction(&self, tx: &TransactionEnvelope) -> Result<(), ConsensusError> {
-        // 1. Verify cryptographic signature
+    /// Validates a single transaction's cryptographic signatures only.
+    pub fn validate_transaction_signatures_only(&self, tx: &TransactionEnvelope) -> Result<(), ConsensusError> {
         match tx.signature_type {
             SignatureType::Ed25519 => {
                 if tx.public_key.len() != 32 {
@@ -316,6 +605,12 @@ impl ConsensusEngine {
                 return Err(ConsensusError::Validation("Secp256k1 signature validation is not yet implemented".to_string()));
             }
         }
+        Ok(())
+    }
+
+    /// Validates a single transaction, including cryptographic signatures and ledger account states.
+    pub fn validate_transaction(&self, tx: &TransactionEnvelope) -> Result<(), ConsensusError> {
+        self.validate_transaction_signatures_only(tx)?;
 
         // 2. Dry-run transition logic against the ledger state
         let mut dry_run_batch = StorageBatch::new();
@@ -442,9 +737,8 @@ impl ConsensusEngine {
         Self::compute_state_root_from_updates(parent_state_root, &account_cache)
     }
 
-    /// Validates an entire block header, Merkle tree alignments, and transaction list constraints.
-    pub fn validate_block(&self, block: &Block) -> Result<(), ConsensusError> {
-        // 1. Enforce block size limit (< 2 MB)
+    /// Performs validation on block size, parent link, Merkle root and signatures without dry-running ledger state.
+    pub fn validate_block_header_only(&self, block: &Block) -> Result<(), ConsensusError> {
         let block_bytes = serialize(block).map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
         if block_bytes.len() > 2 * 1024 * 1024 {
             return Err(ConsensusError::BlockSizeExceeded {
@@ -452,21 +746,16 @@ impl ConsensusEngine {
             });
         }
 
-        // 2. Validate previous block hash matches database best block
         if block.header.version > 1 || block.header.prev_block_hash != Hash::zero() {
-            let best_hash = self
-                .storage
-                .get_best_block()?
-                .ok_or_else(|| ConsensusError::Validation("No parent block header found".to_string()))?;
-            if block.header.prev_block_hash != best_hash {
-                return Err(ConsensusError::InvalidParentHash {
-                    expected: best_hash,
-                    got: block.header.prev_block_hash,
-                });
+            let parent_exists = self.storage.get_block_header(&block.header.prev_block_hash)?.is_some();
+            if !parent_exists {
+                return Err(ConsensusError::Validation(format!(
+                    "Parent block header not found for hash {:?}",
+                    block.header.prev_block_hash
+                )));
             }
         }
 
-        // 3. Verify Merkle root of transaction bodies
         let derived_merkle = Self::calculate_merkle_root(&block.body.transactions)?;
         if block.header.merkle_root != derived_merkle {
             return Err(ConsensusError::InvalidMerkleRoot {
@@ -475,26 +764,35 @@ impl ConsensusEngine {
             });
         }
 
-        // 4. Validate all transaction envelopes inside the block
         for tx in &block.body.transactions {
-            self.validate_transaction(tx)?;
+            self.validate_transaction_signatures_only(tx)?;
         }
 
-        // 5. Validate state root commitment
-        let parent_state_root = if block.header.prev_block_hash == Hash::zero() {
-            Hash::zero()
-        } else {
-            let parent_header = self.storage.get_block_header(&block.header.prev_block_hash)?
-                .ok_or_else(|| ConsensusError::Validation(format!("Parent block header not found for hash {:?}", block.header.prev_block_hash)))?;
-            parent_header.state_root
-        };
+        Ok(())
+    }
 
-        let calculated_root = self.calculate_state_root(parent_state_root, block)?;
-        if calculated_root != block.header.state_root {
-            return Err(ConsensusError::Validation(format!(
-                "State root mismatch: expected {:?}, got {:?}",
-                block.header.state_root, calculated_root
-            )));
+    /// Validates an entire block header, Merkle tree alignments, and transaction list constraints.
+    pub fn validate_block(&self, block: &Block) -> Result<(), ConsensusError> {
+        self.validate_block_header_only(block)?;
+
+        // Validate state root commitment if parent matches best block (tip)
+        let best_hash = self.storage.get_best_block()?.unwrap_or(Hash::zero());
+        if block.header.prev_block_hash == best_hash {
+            let parent_state_root = if best_hash == Hash::zero() {
+                Hash::zero()
+            } else {
+                let parent_header = self.storage.get_block_header(&best_hash)?
+                    .ok_or_else(|| ConsensusError::Validation("Parent block header missing".to_string()))?;
+                parent_header.state_root
+            };
+
+            let calculated_root = self.calculate_state_root(parent_state_root, block)?;
+            if calculated_root != block.header.state_root {
+                return Err(ConsensusError::Validation(format!(
+                    "State root mismatch: expected {:?}, got {:?}",
+                    block.header.state_root, calculated_root
+                )));
+            }
         }
 
         Ok(())

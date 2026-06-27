@@ -305,5 +305,27 @@ pub fn build_router(state: AppState) -> Router {
         .route("/block/:height", get(get_block_by_height))
         .route("/address/:address", get(get_address_state))
         .route("/transaction/:hash", get(get_transaction_by_hash))
+        .layer(axum::middleware::from_fn(cors_middleware))
         .with_state(state)
+}
+
+pub async fn cors_middleware(request: axum::extract::Request, next: axum::middleware::Next) -> axum::response::Response {
+    let method = request.method().clone();
+    if method == axum::http::Method::OPTIONS {
+        let mut response = axum::response::Response::default();
+        let headers = response.headers_mut();
+        headers.insert("Access-Control-Allow-Origin", axum::http::HeaderValue::from_static("*"));
+        headers.insert("Access-Control-Allow-Methods", axum::http::HeaderValue::from_static("GET, POST, OPTIONS"));
+        headers.insert("Access-Control-Allow-Headers", axum::http::HeaderValue::from_static("Content-Type"));
+        headers.insert("Access-Control-Max-Age", axum::http::HeaderValue::from_static("86400"));
+        *response.status_mut() = axum::http::StatusCode::NO_CONTENT;
+        return response;
+    }
+
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert("Access-Control-Allow-Origin", axum::http::HeaderValue::from_static("*"));
+    headers.insert("Access-Control-Allow-Methods", axum::http::HeaderValue::from_static("GET, POST, OPTIONS"));
+    headers.insert("Access-Control-Allow-Headers", axum::http::HeaderValue::from_static("Content-Type"));
+    response
 }

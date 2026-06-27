@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARUNA Network — Wallet & Explorer Dashboard</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="glow glow-1"></div>
+  <div class="glow glow-2"></div>
+
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="45" stroke="url(#logo-grad)" stroke-width="8" />
+          <path d="M50 20L80 70H20L50 20Z" fill="url(#logo-grad)" />
+          <defs>
+            <linearGradient id="logo-grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#FF512F" />
+              <stop offset="1" stop-color="#DD2476" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div>
+          <h1>ARUNA Network</h1>
+          <span class="badge">Sumatera Testnet</span>
+        </div>
+      </div>
+
+      <div class="nav-wrapper">
+        <nav class="nav-tabs">
+          <button class="nav-btn active" data-tab="explorer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            Explorer
+          </button>
+          <button class="nav-btn" data-tab="wallet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><path d="M12 11h.01M16 11h.01M8 11h.01M2 10h20"/></svg>
+            Wallet
+          </button>
+        </nav>
+        <div class="connection-status" id="node-connection">
+          <span class="status-dot disconnected"></span>
+          <span class="status-text">Disconnected</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Metrics Grid -->
+    <section class="metrics-grid">
+      <div class="metric-card">
+        <span class="metric-title">Chain Height</span>
+        <span class="metric-value" id="metric-height">—</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">Tip Block Hash</span>
+        <span class="metric-value code-font" id="metric-tip">—</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-title">Mempool Transactions</span>
+        <span class="metric-value" id="metric-mempool">—</span>
+      </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- tab: EXPLORER -->
+      <div class="tab-pane active" id="tab-explorer">
+        <!-- Search bar -->
+        <div class="search-section card">
+          <h3>Search Ledger</h3>
+          <div class="search-bar">
+            <input type="text" id="search-input" placeholder="Search by block height, block hash, address (sum1...), or transaction hash...">
+            <button id="search-btn">Search</button>
+          </div>
+          <div class="search-error" id="search-error"></div>
+        </div>
+
+        <!-- Search Results (Hidden initially) -->
+        <div class="result-section card hidden" id="search-result-card">
+          <div class="result-header">
+            <h3 id="result-title">Search Result</h3>
+            <button class="close-btn" id="close-result-btn">&times;</button>
+          </div>
+          <div class="result-content" id="result-data"></div>
+        </div>
+
+        <!-- Recent Blocks -->
+        <div class="blocks-section card">
+          <div class="section-header">
+            <h3>Recent Blocks</h3>
+            <button class="refresh-btn" id="refresh-blocks-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 11-.57-8.38l5.67-5.67"/></svg>
+              Refresh
+            </button>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Height</th>
+                  <th>Hash</th>
+                  <th>State Root</th>
+                  <th>Merkle Root</th>
+                  <th>Timestamp</th>
+                  <th>Txs</th>
+                </tr>
+              </thead>
+              <tbody id="blocks-tbody">
+                <tr>
+                  <td colspan="6" class="table-loading">Connecting to Node RPC...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- tab: WALLET -->
+      <div class="tab-pane" id="tab-wallet">
+        <div class="wallet-grid">
+          <!-- Left: Account Keys & Setup -->
+          <div class="wallet-setup card">
+            <h3>Wallet Account Setup</h3>
+            <p class="description">Generate a new Ed25519 wallet or import an existing private key seed. All keys are derived 100% locally in your browser.</p>
+            
+            <div class="action-buttons">
+              <button class="btn btn-primary" id="btn-generate-wallet">Generate New Wallet</button>
+              <span class="or-divider">or</span>
+              <div class="import-input">
+                <input type="text" id="wallet-import-seed" placeholder="Enter 32-byte Hex Private Key Seed">
+                <button class="btn btn-secondary" id="btn-import-wallet">Import</button>
+              </div>
+            </div>
+
+            <!-- Keys Display (Visible after key gen) -->
+            <div class="keys-display hidden" id="keys-display-card">
+              <div class="key-field">
+                <span class="key-label">Sumatera Bech32m Address</span>
+                <div class="key-copy-container">
+                  <span class="key-value code-fontHighlight" id="wallet-address">sum1...</span>
+                  <button class="copy-btn" data-target="wallet-address">Copy</button>
+                </div>
+              </div>
+              <div class="key-field">
+                <span class="key-label">Public Key (Hex)</span>
+                <div class="key-copy-container">
+                  <span class="key-value code-font" id="wallet-pubkey">—</span>
+                  <button class="copy-btn" data-target="wallet-pubkey">Copy</button>
+                </div>
+              </div>
+              <div class="key-field">
+                <span class="key-label">Private Key Seed (Hex)</span>
+                <div class="key-copy-container">
+                  <span class="key-value code-font" id="wallet-privkey">—</span>
+                  <button class="copy-btn" data-target="wallet-privkey">Copy</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Balance & Transfer -->
+          <div class="wallet-actions">
+            <!-- Balance Card -->
+            <div class="balance-card card">
+              <div class="balance-header">
+                <h3>Balance</h3>
+                <button class="refresh-btn" id="refresh-balance-btn">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 11-.57-8.38l5.67-5.67"/></svg>
+                </button>
+              </div>
+              <div class="balance-value-container">
+                <span class="balance-amount" id="wallet-balance">0.000000</span>
+                <span class="balance-denom">ARU</span>
+              </div>
+              <div class="balance-details">
+                <span>Nonce: <strong id="wallet-nonce">0</strong></span>
+                <span>Micro-ARU: <span id="wallet-microaru">0</span></span>
+              </div>
+            </div>
+
+            <!-- Transfer Card -->
+            <div class="transfer-card card">
+              <h3>Create & Sign Transaction</h3>
+              <form id="transfer-form" onsubmit="return false;">
+                <div class="form-group">
+                  <label for="transfer-to">Recipient Address (sum1...)</label>
+                  <input type="text" id="transfer-to" placeholder="sum1qyqszqgpqyqszqgpqyqszqgpqyqszqgpe6sslr" required>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="transfer-amount">Amount (ARU)</label>
+                    <input type="number" id="transfer-amount" step="0.000001" min="0.000001" placeholder="1.0" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="transfer-fee">Fee (ARU)</label>
+                    <input type="number" id="transfer-fee" step="0.000001" min="0.000010" value="0.005000" required>
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" id="btn-submit-tx" disabled>Sign & Submit Transaction</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminal Output -->
+        <div class="terminal-card card">
+          <div class="terminal-header">
+            <span>Client Console Logs</span>
+            <button id="clear-terminal-btn">Clear</button>
+          </div>
+          <div class="terminal-content code-font" id="terminal-output">
+            [System] Console initialized. Generate or import a wallet to begin transaction execution.
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>ARUNA Network Sumatera Testnet Protocol Portal. "Dari Rakyat. Oleh Rakyat. Untuk Rakyat."</p>
+    </footer>
+  </div>
+
+  <!-- JS Cryptography & Bech32m Logic -->
+  <script type="module" src="script.js"></script>
+</body>
+</html>

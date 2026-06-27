@@ -163,12 +163,15 @@ name = "aruna-testing"
 version = "0.1.0"
 dependencies = [
  "aruna-ahash",
+ "aruna-consensus",
  "aruna-crypto",
  "aruna-primitives",
+ "aruna-state",
  "aruna-storage",
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

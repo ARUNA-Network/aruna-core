@@ -15,6 +15,7 @@ const PREFIX_TX_INDEX: u8 = b't';
 const PREFIX_HEIGHT_MAP: u8 = b'b';
 const PREFIX_META: u8 = b'm';
 const PREFIX_HASH_TO_HEIGHT: u8 = b'n';
+const PREFIX_CUMULATIVE_DIFFICULTY: u8 = b'u';
 
 /// Database storage error types.
 #[derive(Error, Debug)]
@@ -112,6 +113,13 @@ impl Storage {
     fn hash_to_height_key(hash: &Hash) -> [u8; 33] {
         let mut key = [0u8; 33];
         key[0] = PREFIX_HASH_TO_HEIGHT;
+        key[1..33].copy_from_slice(&hash.0);
+        key
+    }
+
+    fn cumulative_difficulty_key(hash: &Hash) -> [u8; 33] {
+        let mut key = [0u8; 33];
+        key[0] = PREFIX_CUMULATIVE_DIFFICULTY;
         key[1..33].copy_from_slice(&hash.0);
         key
     }
@@ -318,6 +326,29 @@ impl Storage {
         Ok(())
     }
 
+    /// Write block cumulative difficulty.
+    pub fn put_cumulative_difficulty(&self, hash: &Hash, diff: u128) -> Result<(), StorageError> {
+        let key = Self::cumulative_difficulty_key(hash);
+        self.db.put(key, diff.to_be_bytes())?;
+        Ok(())
+    }
+
+    /// Read block cumulative difficulty.
+    pub fn get_cumulative_difficulty(&self, hash: &Hash) -> Result<Option<u128>, StorageError> {
+        let key = Self::cumulative_difficulty_key(hash);
+        match self.db.get(key)? {
+            Some(bytes) => {
+                if bytes.len() != 16 {
+                    return Err(StorageError::Format("Invalid cumulative difficulty length".to_string()));
+                }
+                let mut diff_bytes = [0u8; 16];
+                diff_bytes.copy_from_slice(&bytes);
+                Ok(Some(u128::from_be_bytes(diff_bytes)))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Retrieve block height for a given hash.
     pub fn get_block_height_by_hash(&self, hash: &Hash) -> Result<Option<u64>, StorageError> {
         let key = Self::hash_to_height_key(hash);
@@ -499,6 +530,12 @@ impl StorageBatch {
         let key = Storage::hash_to_height_key(hash);
         self.batch.put(key, height.to_be_bytes());
     }
+
+    /// Add cumulative difficulty to batch.
+    pub fn put_cumulative_difficulty(&mut self, hash: &Hash, diff: u128) {
+        let key = Storage::cumulative_difficulty_key(hash);
+        self.batch.put(key, diff.to_be_bytes());
+    }
 }
 
 #[cfg(test)]
@@ -605,6 +642,21 @@ mod tests {
             assert!(storage.get_block_height_by_hash(&block_hash).unwrap().is_none());
             storage.put_block_height_by_hash(&block_hash, height).unwrap();
             assert_eq!(storage.get_block_height_by_hash(&block_hash).unwrap().unwrap(), height);
+        }
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
+    #[test]
+    fn test_cumulative_difficulty_roundtrip() {
+        let path = temp_db_path();
+        {
+            let storage = Storage::open(&path).unwrap();
+            let block_hash = Hash([0xbb; 32]);
+            let diff = 98765432109876543210_u128;
+
+            assert!(storage.get_cumulative_difficulty(&block_hash).unwrap().is_none());
+            storage.put_cumulative_difficulty(&block_hash, diff).unwrap();
+            assert_eq!(storage.get_cumulative_difficulty(&block_hash).unwrap().unwrap(), diff);
         }
         let _ = std::fs::remove_dir_all(&path);
     }

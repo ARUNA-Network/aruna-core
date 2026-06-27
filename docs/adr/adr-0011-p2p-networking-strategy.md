@@ -48,4 +48,3 @@ When transitioning from Phase 1 to Phase 2, `crates/networking`'s transport logi
 
 ## Security Impact
 Phase 1 relies on private network setups, firewalls, and manual peer connections. Node identity verification via Node ID checks is enforced during handshakes. Phase 2 will introduce TLS/Noise handshakes and DHT-based defense against Eclipse and DDoS attacks.
-

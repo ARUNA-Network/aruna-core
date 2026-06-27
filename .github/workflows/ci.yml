@@ -207,7 +207,15 @@ jobs:
           echo "=== Node B Transaction Logs ==="
           cat node_b_tx.log
           
-          # Assert that Node B successfully received, validated, and added the transaction to its mempool
-          grep -q "Received and added P2P transaction to mempool" node_b_tx.log
+           # Assert that Node B successfully received, validated, and added the transaction to its mempool
+           grep -q "Received and added P2P transaction to mempool" node_b_tx.log
+
+      - name: Run Protocol Conformance Test
+        run: |
+          CXXFLAGS="-include cstdint" cargo test -p aruna-node --test protocol_conformance
+
+      - name: Run Performance Benchmark
+        run: |
+          CXXFLAGS="-include cstdint" cargo run -p aruna-testing --bin performance_benchmark
 
 
