@@ -317,3 +317,194 @@ fn test_conformance_100_transactions_identical_state() {
 
     println!("Protocol Conformance Test for 100 transactions successful! Node C and Node D state roots match exactly.");
 }
+
+#[test]
+fn test_fork_handling_reconnect_reorg() {
+    let path_a = temp_db_path("fork_a");
+    let path_b = temp_db_path("fork_b");
+    let _cleaner_a = TempDirCleaner { path: path_a.clone() };
+    let _cleaner_b = TempDirCleaner { path: path_b.clone() };
+
+    // Set up two keypairs and two different addresses
+    let keypair_a = Ed25519Keypair::generate();
+    let pubkey_a = keypair_a.public_key_bytes();
+    let sender_a = Address::from_pubkey_hash(derive_pubkey_hash(&pubkey_a));
+
+    let keypair_b = Ed25519Keypair::generate();
+    let pubkey_b = keypair_b.public_key_bytes();
+    let sender_b = Address::from_pubkey_hash(derive_pubkey_hash(&pubkey_b));
+
+    let recipient_a = Address::from_pubkey_hash([0xaa; 20]);
+    let recipient_b = Address::from_pubkey_hash([0xbb; 20]);
+
+    // Setup helper that funds BOTH sender_a and sender_b on genesis state
+    let setup_fork_db = |path: &std::path::Path| -> (Storage, StateManager, ConsensusEngine, Hash) {
+        let storage = Storage::open(path).expect("Failed to open storage");
+        let state_manager = StateManager::new(storage.clone());
+        let engine = ConsensusEngine::new(state_manager.clone(), storage.clone());
+
+        let mut init_batch = StorageBatch::new();
+        init_batch.put_account(&sender_a, 1_000_000, 0, &Hash::zero(), &Hash::zero());
+        init_batch.put_account(&sender_b, 1_000_000, 0, &Hash::zero(), &Hash::zero());
+        storage.write_batch(init_batch).unwrap();
+
+        let genesis_header = BlockHeader {
+            version: 1,
+            prev_block_hash: Hash::zero(),
+            merkle_root: Hash::zero(),
+            state_root: Hash::zero(),
+            timestamp: 1782252000,
+            difficulty: Difficulty(504381424),
+            nonce: 0,
+            validator_root: Hash::zero(),
+            treasury_root: Hash::zero(),
+        };
+        let genesis_body = BlockBody { transactions: vec![], validator_metadata: vec![], ecosystem_metadata: vec![] };
+        let genesis_bytes = serialize(&genesis_header).unwrap();
+        let genesis_hash = aruna_crypto::blake3_hash(&genesis_bytes);
+
+        storage.put_block_header(&genesis_hash, &genesis_header).unwrap();
+        storage.put_block_body(&genesis_hash, &genesis_body).unwrap();
+        storage.put_best_block(&genesis_hash).unwrap();
+        storage.put_chain_height(0).unwrap();
+        storage.put_cumulative_difficulty(&genesis_hash, 0).unwrap();
+        storage.put_block_height_by_hash(&genesis_hash, 0).unwrap();
+
+        (storage, state_manager, engine, genesis_hash)
+    };
+
+    let (storage_a, _state_a, engine_a, genesis_hash) = setup_fork_db(&path_a);
+    let (_storage_b, _state_b, engine_b, _) = setup_fork_db(&path_b);
+
+    // 1. Build Branch A on Node A: 10 blocks (1A..10A)
+    // 1. Build Branch A on Node A: 10 blocks (1A..10A)
+    let mut parent_hash_a = genesis_hash;
+    let mut parent_state_a = Hash::zero();
+    let mut branch_a_hashes = Vec::with_capacity(10);
+    for i in 1..=10 {
+        let payload = TransactionPayload {
+            nonce: Nonce(i),
+            sender: sender_a,
+            recipient: recipient_a,
+            amount: 100,
+            fee: 10,
+            gas_limit: 0,
+            gas_price: 0,
+            data: vec![],
+        };
+        let sig = keypair_a.sign(&serialize(&payload).unwrap()).to_vec();
+        let tx = TransactionEnvelope {
+            payload,
+            signature_type: SignatureType::Ed25519,
+            signature: sig,
+            public_key: pubkey_a.to_vec(),
+        };
+        let body = BlockBody { transactions: vec![tx], validator_metadata: vec![], ecosystem_metadata: vec![] };
+        let merkle_root = ConsensusEngine::calculate_merkle_root(&body.transactions).unwrap();
+        let mut header = BlockHeader {
+            version: 1,
+            prev_block_hash: parent_hash_a,
+            merkle_root,
+            state_root: Hash::zero(),
+            timestamp: 1782252030 + (i as u64 * 30),
+            difficulty: Difficulty(504381424),
+            nonce: 0,
+            validator_root: Hash::zero(),
+            treasury_root: Hash::zero(),
+        };
+
+        let temp = Block { header: header.clone(), body: body.clone() };
+        let state_root = engine_a.calculate_state_root(parent_state_a, &temp).unwrap();
+        header.state_root = state_root;
+
+        let block = Block { header, body };
+        parent_hash_a = engine_a.commit_block(&block).unwrap();
+        parent_state_a = state_root;
+        branch_a_hashes.push(parent_hash_a);
+    }
+
+    assert_eq!(storage_a.get_chain_height().unwrap().unwrap(), 10);
+
+    // 2. Build Branch B on Node B: 11 blocks (1B..11B)
+    let mut parent_hash_b = genesis_hash;
+    let mut parent_state_b = Hash::zero();
+    let mut branch_b_blocks = Vec::with_capacity(11);
+    for i in 1..=11 {
+        let payload = TransactionPayload {
+            nonce: Nonce(i),
+            sender: sender_b,
+            recipient: recipient_b,
+            amount: 200,
+            fee: 10,
+            gas_limit: 0,
+            gas_price: 0,
+            data: vec![],
+        };
+        let sig = keypair_b.sign(&serialize(&payload).unwrap()).to_vec();
+        let tx = TransactionEnvelope {
+            payload,
+            signature_type: SignatureType::Ed25519,
+            signature: sig,
+            public_key: pubkey_b.to_vec(),
+        };
+        let body = BlockBody { transactions: vec![tx], validator_metadata: vec![], ecosystem_metadata: vec![] };
+        let merkle_root = ConsensusEngine::calculate_merkle_root(&body.transactions).unwrap();
+        let mut header = BlockHeader {
+            version: 1,
+            prev_block_hash: parent_hash_b,
+            merkle_root,
+            state_root: Hash::zero(),
+            timestamp: 1782252035 + (i as u64 * 30),
+            difficulty: Difficulty(504381424),
+            nonce: 0,
+            validator_root: Hash::zero(),
+            treasury_root: Hash::zero(),
+        };
+
+        let temp = Block { header: header.clone(), body: body.clone() };
+        let state_root = engine_b.calculate_state_root(parent_state_b, &temp).unwrap();
+        header.state_root = state_root;
+
+        let block = Block { header, body };
+        parent_hash_b = engine_b.commit_block(&block).unwrap();
+        parent_state_b = state_root;
+        branch_b_blocks.push(block);
+    }
+
+    // 3. Connect (Feed Branch B blocks to Node A)
+    // Blocks 1B to 10B should be stored as side-chain blocks (cumulative diff <= 10)
+    for idx in 0..10 {
+        let _h = engine_a.commit_block(&branch_b_blocks[idx]).unwrap();
+        assert_eq!(storage_a.get_best_block().unwrap().unwrap(), parent_hash_a); // Node A tip remains 10A
+        assert_eq!(storage_a.get_chain_height().unwrap().unwrap(), 10);
+
+        // Assert that the canonical height-to-hash mapping is still Branch A hashes!
+        let canonical_hash = storage_a.get_block_hash_by_height(idx as u64 + 1).unwrap().unwrap();
+        assert_eq!(canonical_hash, branch_a_hashes[idx]);
+    }
+
+    // Committing 11B should trigger deep chain reorg!
+    let hash_11b = engine_a.commit_block(&branch_b_blocks[10]).unwrap();
+    assert_eq!(hash_11b, parent_hash_b);
+
+    // 4. Assert Node A successfully switches canonical tip to 11B
+    assert_eq!(storage_a.get_best_block().unwrap().unwrap(), parent_hash_b);
+    assert_eq!(storage_a.get_chain_height().unwrap().unwrap(), 11);
+
+    // Sender A and Recipient A should be rolled back to initial state (1,000,000 and 0)
+    let (bal_sender_a, nonce_sender_a, _, _) = storage_a.get_account(&sender_a).unwrap().unwrap_or((0, 0, Hash::zero(), Hash::zero()));
+    let (bal_rec_a, _, _, _) = storage_a.get_account(&recipient_a).unwrap().unwrap_or((0, 0, Hash::zero(), Hash::zero()));
+    assert_eq!(bal_sender_a, 1_000_000);
+    assert_eq!(nonce_sender_a, 0);
+    assert_eq!(bal_rec_a, 0);
+
+    // Sender B and Recipient B should be successfully applied (11 transfers of 200)
+    let (bal_sender_b, nonce_sender_b, _, _) = storage_a.get_account(&sender_b).unwrap().unwrap();
+    let (bal_rec_b, _, _, _) = storage_a.get_account(&recipient_b).unwrap().unwrap();
+    // 1,000,000 - (11 * (200 + 10)) = 1,000,000 - 2310 = 997,690
+    assert_eq!(bal_sender_b, 997690);
+    assert_eq!(nonce_sender_b, 11);
+    assert_eq!(bal_rec_b, 2200);
+
+    println!("Fork choice deep reorganization test successful! Reconnect and reorg resolved correctly.");
+}
