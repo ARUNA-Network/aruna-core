@@ -41,6 +41,7 @@ fn test_node_ledger_recovery() {
             version: 1,
             prev_block_hash: Hash::zero(),
             merkle_root: Hash::zero(),
+            state_root: Hash::zero(),
             timestamp: 1782252000,
             difficulty: Difficulty(504381424),
             nonce: 0,

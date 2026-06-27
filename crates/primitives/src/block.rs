@@ -10,6 +10,8 @@ pub struct BlockHeader {
     pub prev_block_hash: Hash,
     /// Cryptographic Merkle root hash of all transactions inside the block body.
     pub merkle_root: Hash,
+    /// Cryptographic rolling state root hash of the ledger state after executing this block's transactions.
+    pub state_root: Hash,
     /// POSIX timestamp in seconds.
     pub timestamp: u64,
     /// Compact difficulty target.

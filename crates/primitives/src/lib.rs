@@ -96,6 +96,7 @@ mod tests {
             version: 1,
             prev_block_hash: Hash([0x11; 32]),
             merkle_root: Hash([0x22; 32]),
+            state_root: Hash([0xaa; 32]),
             timestamp: 1234567890,
             difficulty: Difficulty(0x12345678),
             nonce: 9876543210,

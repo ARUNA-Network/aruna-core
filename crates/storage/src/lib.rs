@@ -554,6 +554,7 @@ mod tests {
                 version: 1,
                 prev_block_hash: Hash([0xbb; 32]),
                 merkle_root: Hash([0xcc; 32]),
+                state_root: Hash([0xaa; 32]),
                 timestamp: 123456789,
                 difficulty: Difficulty(500),
                 nonce: 99999,

@@ -78,6 +78,7 @@ impl ConsensusEngine {
             version: 1,
             prev_block_hash: best_hash,
             merkle_root,
+            state_root: Hash::zero(),
             timestamp,
             difficulty: best_header.difficulty,
             nonce: 0,
@@ -85,7 +86,12 @@ impl ConsensusEngine {
             treasury_root: Hash::zero(),
         };
 
-        let block = Block { header, body };
+        let mut block = Block { header, body };
+
+        // Calculate dry-run state root and assign to header
+        let parent_state_root = best_header.state_root;
+        let final_state_root = self.calculate_state_root(parent_state_root, &block)?;
+        block.header.state_root = final_state_root;
 
         // Perform consensus dry-run validations on the new block
         self.validate_block(&block)?;
@@ -95,6 +101,9 @@ impl ConsensusEngine {
 
     /// Commits a block to the RocksDB database, executing its transactions, updating ledger state, and distributing rewards.
     pub fn commit_block(&self, block: &Block) -> Result<Hash, ConsensusError> {
+        // Dry-run validate the block state transitions and consensus criteria
+        self.validate_block(block)?;
+
         // 1. Serialize block header and calculate block hash
         let header_bytes = serialize(&block.header)
             .map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
@@ -315,6 +324,124 @@ impl ConsensusEngine {
         Ok(())
     }
 
+    /// Computes the state root hash deterministically given parent state root and modified accounts list.
+    pub fn compute_state_root_from_updates(parent_state_root: Hash, modified_accounts: &std::collections::HashMap<Address, aruna_state::Account>) -> Result<Hash, ConsensusError> {
+        if modified_accounts.is_empty() {
+            return Ok(parent_state_root);
+        }
+
+        // Sort addresses lexicographically for determinism
+        let mut sorted_keys: Vec<&Address> = modified_accounts.keys().collect();
+        sorted_keys.sort_unstable();
+
+        let mut updates_bytes = Vec::new();
+        for addr in sorted_keys {
+            let acc = modified_accounts.get(addr).unwrap();
+            let addr_bytes = serialize(addr).map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
+            let acc_bytes = serialize(acc).map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
+            updates_bytes.extend_from_slice(&addr_bytes);
+            updates_bytes.extend_from_slice(&acc_bytes);
+        }
+
+        let block_updates_hash = aruna_crypto::blake3_hash(&updates_bytes);
+
+        let mut concat = [0u8; 64];
+        concat[0..32].copy_from_slice(&parent_state_root.0);
+        concat[32..64].copy_from_slice(&block_updates_hash.0);
+
+        Ok(aruna_crypto::blake3_hash(&concat))
+    }
+
+    /// Dry-runs the block state transitions and calculates the resulting state root hash.
+    pub fn calculate_state_root(&self, parent_state_root: Hash, block: &Block) -> Result<Hash, ConsensusError> {
+        let mut account_cache: std::collections::HashMap<Address, aruna_state::Account> = std::collections::HashMap::new();
+
+        let get_account_local = |addr: &Address, cache: &std::collections::HashMap<Address, aruna_state::Account>, state_mgr: &StateManager| -> Result<aruna_state::Account, ConsensusError> {
+            if let Some(acc) = cache.get(addr) {
+                Ok(acc.clone())
+            } else {
+                let acc = state_mgr.get_account(addr)?
+                    .unwrap_or_else(|| aruna_state::Account::new(0, aruna_primitives::Nonce::zero()));
+                Ok(acc)
+            }
+        };
+
+        // 1. Dry-run execute all transactions
+        for tx in &block.body.transactions {
+            let sender_addr = tx.payload.sender;
+            let recipient_addr = tx.payload.recipient;
+
+            let mut sender = get_account_local(&sender_addr, &account_cache, &self.state_manager)?;
+            let mut recipient = get_account_local(&recipient_addr, &account_cache, &self.state_manager)?;
+
+            let expected_nonce = sender.nonce.increment();
+            if tx.payload.nonce != expected_nonce {
+                return Err(ConsensusError::Validation(format!(
+                    "Nonce mismatch for sender {:?}: expected {:?}, got {:?}",
+                    sender_addr, expected_nonce, tx.payload.nonce
+                )));
+            }
+
+            let total_required = tx.payload.amount.checked_add(tx.payload.fee)
+                .ok_or_else(|| ConsensusError::Validation("Transaction amount/fee overflow".to_string()))?;
+            
+            if sender.balance < total_required {
+                return Err(ConsensusError::Validation(format!(
+                    "Insufficient balance for sender {:?}: has {}, requires {}",
+                    sender_addr, sender.balance, total_required
+                )));
+            }
+
+            sender.balance -= total_required;
+            sender.nonce = tx.payload.nonce;
+
+            recipient.balance = recipient.balance.checked_add(tx.payload.amount)
+                .ok_or_else(|| ConsensusError::Validation("Recipient balance overflow".to_string()))?;
+
+            account_cache.insert(sender_addr, sender);
+            account_cache.insert(recipient_addr, recipient);
+        }
+
+        // 2. Dry-run block rewards
+        let next_height = if block.header.prev_block_hash == Hash::zero() {
+            0
+        } else {
+            let parent_height = self.storage.get_block_height_by_hash(&block.header.prev_block_hash)?
+                .ok_or_else(|| ConsensusError::Validation(format!("Parent block height not found for hash {:?}", block.header.prev_block_hash)))?;
+            parent_height + 1
+        };
+
+        let total_fees: u64 = block.body.transactions.iter().map(|tx| tx.payload.fee).sum();
+        let (miner_reward, validator_reward, treasury_reward) = Self::calculate_reward(next_height);
+
+        let total_miner_payout = miner_reward + (total_fees * 70 / 100);
+        let total_validator_payout = validator_reward + (total_fees * 25 / 100);
+        
+        let total_pool = miner_reward + validator_reward + treasury_reward + total_fees;
+        let total_treasury_payout = total_pool - total_miner_payout - total_validator_payout;
+
+        let (_, miner_addr) = Address::from_bech32m("sum1qyqszqgpqyqszqgpqyqszqgpqyqszqgpe6sslr").unwrap();
+        let (_, validator_addr) = Address::from_bech32m("sum1qgpqyqszqgpqyqszqgpqyqszqgpqyqszg7k454").unwrap();
+        let (_, treasury_addr) = Address::from_bech32m("sumc1qszqgpqyqszqgpqyqszqgpqyqszqgpqypa49fy").unwrap();
+
+        let mut miner = get_account_local(&miner_addr, &account_cache, &self.state_manager)?;
+        miner.balance = miner.balance.checked_add(total_miner_payout)
+            .ok_or_else(|| ConsensusError::Validation("Miner balance overflow".to_string()))?;
+        account_cache.insert(miner_addr, miner);
+
+        let mut validator = get_account_local(&validator_addr, &account_cache, &self.state_manager)?;
+        validator.balance = validator.balance.checked_add(total_validator_payout)
+            .ok_or_else(|| ConsensusError::Validation("Validator balance overflow".to_string()))?;
+        account_cache.insert(validator_addr, validator);
+
+        let mut treasury = get_account_local(&treasury_addr, &account_cache, &self.state_manager)?;
+        treasury.balance = treasury.balance.checked_add(total_treasury_payout)
+            .ok_or_else(|| ConsensusError::Validation("Treasury balance overflow".to_string()))?;
+        account_cache.insert(treasury_addr, treasury);
+
+        Self::compute_state_root_from_updates(parent_state_root, &account_cache)
+    }
+
     /// Validates an entire block header, Merkle tree alignments, and transaction list constraints.
     pub fn validate_block(&self, block: &Block) -> Result<(), ConsensusError> {
         // 1. Enforce block size limit (< 2 MB)
@@ -326,7 +453,7 @@ impl ConsensusEngine {
         }
 
         // 2. Validate previous block hash matches database best block
-        if block.header.version > 1 {
+        if block.header.version > 1 || block.header.prev_block_hash != Hash::zero() {
             let best_hash = self
                 .storage
                 .get_best_block()?
@@ -353,6 +480,23 @@ impl ConsensusEngine {
             self.validate_transaction(tx)?;
         }
 
+        // 5. Validate state root commitment
+        let parent_state_root = if block.header.prev_block_hash == Hash::zero() {
+            Hash::zero()
+        } else {
+            let parent_header = self.storage.get_block_header(&block.header.prev_block_hash)?
+                .ok_or_else(|| ConsensusError::Validation(format!("Parent block header not found for hash {:?}", block.header.prev_block_hash)))?;
+            parent_header.state_root
+        };
+
+        let calculated_root = self.calculate_state_root(parent_state_root, block)?;
+        if calculated_root != block.header.state_root {
+            return Err(ConsensusError::Validation(format!(
+                "State root mismatch: expected {:?}, got {:?}",
+                block.header.state_root, calculated_root
+            )));
+        }
+
         Ok(())
     }
 
@@ -369,7 +513,7 @@ impl ConsensusEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aruna_primitives::{Address, Nonce, TransactionPayload};
+    use aruna_primitives::{Address, Nonce, TransactionPayload, Difficulty};
     use aruna_crypto::Ed25519Keypair;
 
     fn temp_db_path() -> std::path::PathBuf {
@@ -470,6 +614,77 @@ mod tests {
             corrupted_tx.public_key = vec![0; 32];
             let result_corrupted = engine.validate_transaction(&corrupted_tx);
             assert!(matches!(result_corrupted, Err(ConsensusError::AddressMismatch)));
+        }
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
+    #[test]
+    fn test_state_root_commitment_validation() {
+        let path = temp_db_path();
+        {
+            let storage = Storage::open(&path).unwrap();
+            let state_manager = StateManager::new(storage.clone());
+            let engine = ConsensusEngine::new(state_manager.clone(), storage.clone());
+
+            let keypair = Ed25519Keypair::generate();
+            let pubkey = keypair.public_key_bytes();
+            let pkh = derive_pubkey_hash(&pubkey);
+            let sender = Address::from_pubkey_hash(pkh);
+            let recipient = Address::from_pubkey_hash([0x22; 20]);
+
+            state_manager.put_account(&sender, &aruna_state::Account::new(10000, Nonce(0))).unwrap();
+
+            // Set up a block with 1 valid transaction
+            let payload = TransactionPayload {
+                nonce: Nonce(1),
+                sender,
+                recipient,
+                amount: 1000,
+                fee: 100,
+                gas_limit: 0,
+                gas_price: 0,
+                data: vec![],
+            };
+            let sig = keypair.sign(&serialize(&payload).unwrap());
+            let tx = TransactionEnvelope {
+                payload,
+                signature_type: SignatureType::Ed25519,
+                signature: sig.to_vec(),
+                public_key: pubkey.to_vec(),
+            };
+
+            let block_body = BlockBody {
+                transactions: vec![tx],
+                validator_metadata: vec![],
+                ecosystem_metadata: vec![],
+            };
+            let merkle_root = ConsensusEngine::calculate_merkle_root(&block_body.transactions).unwrap();
+
+            let header = BlockHeader {
+                version: 1,
+                prev_block_hash: Hash::zero(),
+                merkle_root,
+                state_root: Hash::zero(),
+                timestamp: 123456789,
+                difficulty: Difficulty(1),
+                nonce: 0,
+                validator_root: Hash::zero(),
+                treasury_root: Hash::zero(),
+            };
+
+            let mut block = Block { header, body: block_body };
+
+            // Calculate the correct state root
+            let calculated_root = engine.calculate_state_root(Hash::zero(), &block).unwrap();
+            
+            // If the header has Hash::zero(), it should fail validation because of state root mismatch
+            let res_fail = engine.validate_block(&block);
+            assert!(matches!(res_fail, Err(ConsensusError::Validation(ref m)) if m.contains("State root mismatch")));
+
+            // If we set the correct state root, it should pass validation
+            block.header.state_root = calculated_root;
+            let res_success = engine.validate_block(&block);
+            assert!(res_success.is_ok());
         }
         let _ = std::fs::remove_dir_all(&path);
     }
