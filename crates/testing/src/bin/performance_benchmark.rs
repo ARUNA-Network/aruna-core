@@ -45,6 +45,22 @@ fn get_memory_usage_mb() -> f64 {
     0.0
 }
 
+fn get_directory_size(path: &std::path::Path) -> u64 {
+    let mut total_size = 0;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata() {
+                if meta.is_file() {
+                    total_size += meta.len();
+                } else if meta.is_dir() {
+                    total_size += get_directory_size(&entry.path());
+                }
+            }
+        }
+    }
+    total_size
+}
+
 fn initialize_node_state(path: &std::path::Path, sender: &Address) -> (Storage, StateManager, ConsensusEngine, Hash) {
     let storage = Storage::open(path).expect("Failed to open storage");
     let state_manager = StateManager::new(storage.clone());
@@ -129,16 +145,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gen_duration = gen_start.elapsed();
 
     // 2. Measure TPS (sequential block packaging & execution)
-    println!("Benchmarking Transaction Processing Speed (TPS)...");
+    println!("Benchmarking Transaction Processing Speed (TPS) and block production time...");
     let block_count = 10;
     let tx_per_block = 100;
     let mut produced_blocks = Vec::new();
     let mut parent_hash = genesis_hash;
     let mut parent_state_root = Hash::zero();
 
+    let mut total_production_duration = std::time::Duration::new(0, 0);
     let tps_start = Instant::now();
     for b_idx in 0..block_count {
         let block_txs = transactions[(b_idx * tx_per_block)..((b_idx + 1) * tx_per_block)].to_vec();
+        
+        let prod_start = Instant::now();
         let body = BlockBody {
             transactions: block_txs,
             validator_metadata: vec![],
@@ -163,6 +182,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         header.state_root = state_root;
 
         let block = Block { header, body };
+        total_production_duration += prod_start.elapsed();
+
         let block_hash = engine_a.commit_block(&block).unwrap();
         
         parent_hash = block_hash;
@@ -171,6 +192,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let tps_duration = tps_start.elapsed();
     let tps = 1000.0 / tps_duration.as_secs_f64();
+    let avg_block_prod_ms = (total_production_duration.as_secs_f64() * 1000.0) / block_count as f64;
 
     // 3. Measure Block Propagation / Processing latency (1 block validation + commit)
     println!("Benchmarking single block propagation latency...");
@@ -220,6 +242,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 5. Measure Resident Set Size memory consumption
     let memory_used_mb = get_memory_usage_mb();
 
+    // 6. Measure Database size on disk (Node A after committing 10 blocks)
+    let db_size_bytes = get_directory_size(&path_a);
+    let db_size_kb = db_size_bytes as f64 / 1024.0;
+
     // Print JSON Performance Benchmark Report
     let report = json!({
         "metrics": {
@@ -229,9 +255,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "transactions_processed": 1000,
             "tps_execution_only": tps,
             "tps_total_duration_ms": tps_duration.as_millis(),
+            "avg_block_production_duration_ms": avg_block_prod_ms,
             "single_block_propagation_ms": prop_duration.as_secs_f64() * 1000.0,
             "historical_sync_10_blocks_ms": sync_duration.as_millis(),
             "memory_footprint_rss_mb": memory_used_mb,
+            "database_size_on_disk_kb": db_size_kb,
         },
         "success": true
     });
