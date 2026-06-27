@@ -201,3 +201,119 @@ fn test_conformance_two_nodes_identical_state() {
 
     println!("Protocol Conformance Test successful! Node A and Node B state roots and accounts are identical.");
 }
+
+#[test]
+fn test_conformance_100_transactions_identical_state() {
+    let path_c = temp_db_path("node_c");
+    let path_d = temp_db_path("node_d");
+    let _cleaner_c = TempDirCleaner { path: path_c.clone() };
+    let _cleaner_d = TempDirCleaner { path: path_d.clone() };
+
+    let keypair = Ed25519Keypair::generate();
+    let pubkey = keypair.public_key_bytes();
+    let pkh = derive_pubkey_hash(&pubkey);
+    let sender = Address::from_pubkey_hash(pkh);
+
+    let (storage_c, _state_c, engine_c, genesis_hash) = initialize_node_state(&path_c, &sender);
+    let (storage_d, _state_d, engine_d, _) = initialize_node_state(&path_d, &sender);
+
+    // 1. Generate 100 deterministic transactions
+    let mut transactions = Vec::with_capacity(100);
+    for nonce_val in 1..=100 {
+        // Shift offset to avoid overlap with consensus reward accounts
+        let recipient = Address::from_pubkey_hash([nonce_val as u8 + 100; 20]);
+        let payload = TransactionPayload {
+            nonce: Nonce(nonce_val),
+            sender,
+            recipient,
+            amount: 1000,
+            fee: 10,
+            gas_limit: 0,
+            gas_price: 0,
+            data: vec![],
+        };
+        let sig = keypair.sign(&serialize(&payload).unwrap()).to_vec();
+        let tx = TransactionEnvelope {
+            payload,
+            signature_type: SignatureType::Ed25519,
+            signature: sig,
+            public_key: pubkey.to_vec(),
+        };
+        transactions.push(tx);
+    }
+
+    // 2. Group into 5 blocks (20 transactions per block) and commit on Node C
+    let block_count = 5;
+    let tx_per_block = 20;
+    let mut committed_blocks = Vec::with_capacity(block_count);
+    let mut parent_hash = genesis_hash;
+    let mut parent_state_root = Hash::zero();
+
+    for b_idx in 0..block_count {
+        let block_txs = transactions[(b_idx * tx_per_block)..((b_idx + 1) * tx_per_block)].to_vec();
+        let body = BlockBody {
+            transactions: block_txs,
+            validator_metadata: vec![],
+            ecosystem_metadata: vec![],
+        };
+        let merkle_root = ConsensusEngine::calculate_merkle_root(&body.transactions).unwrap();
+        let mut header = BlockHeader {
+            version: 1,
+            prev_block_hash: parent_hash,
+            merkle_root,
+            state_root: Hash::zero(),
+            timestamp: 1782252030 + (b_idx as u64 * 30),
+            difficulty: Difficulty(504381424),
+            nonce: 0,
+            validator_root: Hash::zero(),
+            treasury_root: Hash::zero(),
+        };
+
+        let temp_block = Block { header: header.clone(), body: body.clone() };
+        let state_root = engine_c.calculate_state_root(parent_state_root, &temp_block).unwrap();
+        header.state_root = state_root;
+
+        let block = Block { header, body };
+        let block_hash = engine_c.commit_block(&block).unwrap();
+
+        parent_hash = block_hash;
+        parent_state_root = state_root;
+        committed_blocks.push(block);
+    }
+
+    // 3. Commit identical blocks on Node D
+    for block in &committed_blocks {
+        let _ = engine_d.commit_block(block).unwrap();
+    }
+
+    // 4. Assertions for exact determinism
+    assert_eq!(storage_c.get_chain_height().unwrap().unwrap(), 5);
+    assert_eq!(storage_d.get_chain_height().unwrap().unwrap(), 5);
+
+    let tip_hash_c = storage_c.get_best_block().unwrap().unwrap();
+    let tip_hash_d = storage_d.get_best_block().unwrap().unwrap();
+    assert_eq!(tip_hash_c, tip_hash_d);
+
+    let header_c = storage_c.get_block_header(&tip_hash_c).unwrap().unwrap();
+    let header_d = storage_d.get_block_header(&tip_hash_d).unwrap().unwrap();
+    assert_eq!(header_c.state_root, header_d.state_root);
+
+    // Verify Sender Account state
+    let (bal_sender_c, nonce_sender_c, _, _) = storage_c.get_account(&sender).unwrap().unwrap();
+    let (bal_sender_d, nonce_sender_d, _, _) = storage_d.get_account(&sender).unwrap().unwrap();
+    assert_eq!(bal_sender_c, bal_sender_d);
+    assert_eq!(nonce_sender_c, nonce_sender_d);
+    assert_eq!(nonce_sender_c, 100);
+
+    // Verify all 100 Recipient Account states
+    for nonce_val in 1..=100 {
+        let recipient = Address::from_pubkey_hash([nonce_val as u8 + 100; 20]);
+        let (bal_rec_c, nonce_rec_c, _, _) = storage_c.get_account(&recipient).unwrap().unwrap();
+        let (bal_rec_d, nonce_rec_d, _, _) = storage_d.get_account(&recipient).unwrap().unwrap();
+        assert_eq!(bal_rec_c, bal_rec_d);
+        assert_eq!(nonce_rec_c, nonce_rec_d);
+        assert_eq!(bal_rec_c, 1000);
+    }
+
+    println!("Protocol Conformance Test for 100 transactions successful! Node C and Node D state roots match exactly.");
+}
