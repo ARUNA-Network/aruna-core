@@ -62,7 +62,7 @@ impl Mempool {
             .map_err(|e| MempoolError::Serialization(e.to_string()))?;
         let tx_size = tx_bytes.len();
         
-        let min_fee = (tx_size as u64) * 10;
+        let min_fee = ((tx_size as u64) * 10).max(2280);
         if tx.payload.fee < min_fee {
             return Err(MempoolError::FeeTooLow {
                 required: min_fee,

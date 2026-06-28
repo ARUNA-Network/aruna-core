@@ -218,6 +218,7 @@ jobs:
           CXXFLAGS="-include cstdint" cargo test -p aruna-node --test byzantine_tests
           CXXFLAGS="-include cstdint" cargo test -p aruna-node --test multi_node_consensus
           CXXFLAGS="-include cstdint" cargo test -p aruna-node --test state_commitment_conformance
+          CXXFLAGS="-include cstdint" cargo test -p aruna-node --test consensus_correctness
 
       - name: Run Performance Benchmark
         run: |

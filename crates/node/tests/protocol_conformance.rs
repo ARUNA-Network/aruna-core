@@ -101,7 +101,7 @@ fn test_conformance_two_nodes_identical_state() {
             sender,
             recipient,
             amount: 10_000 * nonce_val, // varying amounts
-            fee: 100,
+            fee: 5000,
             gas_limit: 0,
             gas_price: 0,
             data: vec![],
@@ -233,7 +233,7 @@ fn test_conformance_100_transactions_identical_state() {
             sender,
             recipient,
             amount: 1000,
-            fee: 10,
+            fee: 5000,
             gas_limit: 0,
             gas_price: 0,
             data: vec![],
@@ -399,7 +399,7 @@ fn test_fork_handling_reconnect_reorg() {
             sender: sender_a,
             recipient: recipient_a,
             amount: 100,
-            fee: 10,
+            fee: 5000,
             gas_limit: 0,
             gas_price: 0,
             data: vec![],
@@ -447,7 +447,7 @@ fn test_fork_handling_reconnect_reorg() {
             sender: sender_b,
             recipient: recipient_b,
             amount: 200,
-            fee: 10,
+            fee: 5000,
             gas_limit: 0,
             gas_price: 0,
             data: vec![],
@@ -513,8 +513,8 @@ fn test_fork_handling_reconnect_reorg() {
     // Sender B and Recipient B should be successfully applied (11 transfers of 200)
     let (bal_sender_b, nonce_sender_b, _, _) = storage_a.get_account(&sender_b).unwrap().unwrap();
     let (bal_rec_b, _, _, _) = storage_a.get_account(&recipient_b).unwrap().unwrap();
-    // 1,000,000 - (11 * (200 + 10)) = 1,000,000 - 2310 = 997,690
-    assert_eq!(bal_sender_b, 997690);
+    // 1,000,000 - (11 * (200 + 5000)) = 1,000,000 - 57,200 = 942,800
+    assert_eq!(bal_sender_b, 942800);
     assert_eq!(nonce_sender_b, 11);
     assert_eq!(bal_rec_b, 2200);
 

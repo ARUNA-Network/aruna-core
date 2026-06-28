@@ -2,6 +2,7 @@
 //! Conforms to specifications defined in docs/protocol/consensus.md, block.md, and transaction.md.
 
 use aruna_primitives::{Block, BlockHeader, BlockBody, TransactionEnvelope, Hash, serialize, SignatureType, Address};
+use std::time::SystemTime;
 use aruna_state::{StateManager, StateError};
 use aruna_storage::{Storage, StorageBatch, StorageError};
 use aruna_crypto::{CryptoError, Ed25519Verifier, derive_pubkey_hash};
@@ -779,13 +780,31 @@ impl ConsensusEngine {
         }
 
         if block.header.version > 1 || block.header.prev_block_hash != Hash::zero() {
-            let parent_exists = self.storage.get_block_header(&block.header.prev_block_hash)?.is_some();
-            if !parent_exists {
-                return Err(ConsensusError::Validation(format!(
+            let parent_header = self.storage.get_block_header(&block.header.prev_block_hash)?
+                .ok_or_else(|| ConsensusError::Validation(format!(
                     "Parent block header not found for hash {:?}",
                     block.header.prev_block_hash
-                )));
+                )))?;
+
+            // Timestamp Rule 1: strictly increasing timestamps
+            if block.header.timestamp <= parent_header.timestamp {
+                return Err(ConsensusError::InvalidTimestamp {
+                    timestamp: block.header.timestamp,
+                    min_timestamp: parent_header.timestamp + 1,
+                });
             }
+        }
+
+        // Timestamp Rule 2: Future Limit (max 2 hours / 7200 seconds in the future)
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(|e| ConsensusError::Validation(e.to_string()))?
+            .as_secs();
+        if block.header.timestamp > now + 7200 {
+            return Err(ConsensusError::Validation(format!(
+                "Block timestamp {} is too far in the future (limit: {})",
+                block.header.timestamp, now + 7200
+            )));
         }
 
         let derived_merkle = Self::calculate_merkle_root(&block.body.transactions)?;
@@ -798,6 +817,16 @@ impl ConsensusEngine {
 
         for tx in &block.body.transactions {
             self.validate_transaction_signatures_only(tx)?;
+
+            // Enforce minimum transaction fee floor (10 micro-ARU/byte, min 2280 micro-ARU)
+            let tx_bytes = serialize(tx).map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
+            let min_fee = ((tx_bytes.len() as u64) * 10).max(2280);
+            if tx.payload.fee < min_fee {
+                return Err(ConsensusError::Validation(format!(
+                    "Transaction fee too low: expected at least {}, got {}",
+                    min_fee, tx.payload.fee
+                )));
+            }
         }
 
         Ok(())
@@ -982,7 +1011,7 @@ mod tests {
                 sender,
                 recipient,
                 amount: 1000,
-                fee: 100,
+                fee: 5000,
                 gas_limit: 0,
                 gas_price: 0,
                 data: vec![],
