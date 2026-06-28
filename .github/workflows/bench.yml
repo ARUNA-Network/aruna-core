@@ -10,12 +10,23 @@ env:
 
 jobs:
   benchmark:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install GCC 14 and LLVM 18
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 clang-18 llvm-18 libclang-18-dev cmake
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.96.0
 
       - uses: Swatinem/rust-cache@v2
 
