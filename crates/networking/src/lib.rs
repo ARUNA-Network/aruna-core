@@ -91,10 +91,20 @@ impl P2PManager {
 
     /// Broadcast a block to all active connected peers.
     pub fn broadcast_block(&self, block: &Block) {
+        self.broadcast_block_exclude(block, None);
+    }
+
+    /// Broadcast a block to all active connected peers (optionally excluding one peer).
+    pub fn broadcast_block_exclude(&self, block: &Block, exclude_tx: Option<&mpsc::UnboundedSender<P2PMessage>>) {
         let msg = P2PMessage::BlockBroadcast(block.clone());
         let writers = self.peer_writers.lock().unwrap();
-        for tx in writers.iter() {
-            let _ = tx.send(msg.clone());
+        for writer in writers.iter() {
+            if let Some(exc) = exclude_tx {
+                if writer.same_channel(exc) {
+                    continue;
+                }
+            }
+            let _ = writer.send(msg.clone());
         }
     }
 
@@ -326,6 +336,8 @@ impl P2PManager {
                                 Ok(hash) => {
                                     let h = self.storage.get_chain_height().unwrap_or(Some(0)).unwrap_or(0);
                                     println!("Synced and committed Block #{} | Hash: {}", h, hash);
+                                    // Relay the block broadcast to other peers, excluding the sender channel
+                                    self.broadcast_block_exclude(&block, Some(&tx));
                                 }
                                 Err(e) => {
                                     eprintln!("Broadcasted block commit failed: {:?}", e);
