@@ -10,6 +10,7 @@ pub enum CliCommand {
         p2p_port: u16,
         rpc_port: u16,
         peer_addr: Option<SocketAddr>,
+        block_time_secs: u64,
     },
     Submit {
         file_path: String,
@@ -59,6 +60,7 @@ impl CliConfig {
             let mut p2p_port = 9000;
             let mut rpc_port = 8080;
             let mut peer_addr = None;
+            let mut block_time_secs = 30;
 
             let mut i = 1;
             while i < args.len() {
@@ -91,6 +93,15 @@ impl CliConfig {
                             return Err("Missing value for --peer".to_string());
                         }
                     }
+                    "--block-time" => {
+                        if i + 1 < args.len() {
+                            block_time_secs = args[i + 1].parse::<u64>()
+                                .map_err(|_| format!("Invalid block time: {}", args[i+1]))?;
+                            i += 2;
+                        } else {
+                            return Err("Missing value for --block-time".to_string());
+                        }
+                    }
                     "--help" | "-h" | "help" => {
                         return Ok(Self { command: CliCommand::Help });
                     }
@@ -101,7 +112,7 @@ impl CliConfig {
             }
 
             Ok(Self {
-                command: CliCommand::Daemon { p2p_port, rpc_port, peer_addr }
+                command: CliCommand::Daemon { p2p_port, rpc_port, peer_addr, block_time_secs }
             })
         }
     }
@@ -118,6 +129,7 @@ impl CliConfig {
         println!("  --p2p-port <port>        P2P listening port (default: 9000)");
         println!("  --rpc-port <port>        HTTP RPC listening port (default: 8080)");
         println!("  --peer <ip:port>         Bootstrap peer address to connect to");
+        println!("  --block-time <secs>      Block production loop interval in seconds (default: 30)");
         println!("  aruna-node               Start the full node daemon (default)");
     }
 }

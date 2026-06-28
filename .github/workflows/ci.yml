@@ -210,9 +210,10 @@ jobs:
            # Assert that Node B successfully received, validated, and added the transaction to its mempool
            grep -q "Received and added P2P transaction to mempool" node_b_tx.log
 
-      - name: Run Protocol Conformance Test
+      - name: Run Protocol & Network Conformance Tests
         run: |
           CXXFLAGS="-include cstdint" cargo test -p aruna-node --test protocol_conformance
+          CXXFLAGS="-include cstdint" cargo test -p aruna-node --test network_conformance
 
       - name: Run Performance Benchmark
         run: |

@@ -124,7 +124,7 @@ async fn test_wallet_end_to_end_flow() {
 
     // Setup Node Context running on RPC port 8185
     let rpc_port = 8185;
-    let context = Arc::new(NodeContext::new(storage.clone(), 9105, rpc_port, 7777, path.clone()));
+    let context = Arc::new(NodeContext::new(storage.clone(), 9105, rpc_port, 7777, path.clone(), 30));
 
     // Start HTTP RPC server task
     let rpc_ctx = context.clone();

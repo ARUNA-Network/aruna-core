@@ -211,13 +211,17 @@ impl Mempool {
         let mut sorted_txs: Vec<&TransactionEnvelope> = txs.values().collect();
 
         sorted_txs.sort_by(|a, b| {
-            let a_size = aruna_primitives::serialize(a).map(|b| b.len()).unwrap_or(1);
-            let b_size = aruna_primitives::serialize(b).map(|b| b.len()).unwrap_or(1);
-            
-            let a_density = (a.payload.fee as f64) / (a_size as f64);
-            let b_density = (b.payload.fee as f64) / (b_size as f64);
+            if a.payload.sender == b.payload.sender {
+                a.payload.nonce.cmp(&b.payload.nonce)
+            } else {
+                let a_size = aruna_primitives::serialize(a).map(|b| b.len()).unwrap_or(1);
+                let b_size = aruna_primitives::serialize(b).map(|b| b.len()).unwrap_or(1);
+                
+                let a_density = (a.payload.fee as f64) / (a_size as f64);
+                let b_density = (b.payload.fee as f64) / (b_size as f64);
 
-            b_density.partial_cmp(&a_density).unwrap_or(std::cmp::Ordering::Equal)
+                b_density.partial_cmp(&a_density).unwrap_or(std::cmp::Ordering::Equal)
+            }
         });
 
         sorted_txs.into_iter().take(limit).cloned().collect()

@@ -4,9 +4,9 @@ use super::NodeContext;
 
 pub fn start_block_producer(context: Arc<NodeContext>) {
     tokio::spawn(async move {
-        println!("Starting Block Producer loop (30-second interval)...");
+        println!("Starting Block Producer loop ({}-second interval)...", context.block_time_secs);
         loop {
-            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(context.block_time_secs)).await;
             
             // Fetch pending transactions from mempool
             let txs = context.mempool.get_pending_transactions(100);

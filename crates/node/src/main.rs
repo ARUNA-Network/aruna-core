@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         CliCommand::Status | CliCommand::Block { .. } | CliCommand::Blocks => {
             cli::handle_inspect_command(args.command)
         }
-        CliCommand::Daemon { p2p_port, rpc_port, peer_addr } => {
+        CliCommand::Daemon { p2p_port, rpc_port, peer_addr, block_time_secs } => {
             println!("ARUNA Core Node starting...");
 
             let db_dir = if p2p_port == 9000 {
@@ -45,6 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 rpc_port,
                 genesis_config.genesis.chain_id,
                 db_path,
+                block_time_secs,
             );
 
             let runtime = runtime::NodeRuntime::new(context);
