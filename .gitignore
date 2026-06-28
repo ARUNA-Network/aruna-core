@@ -1,4 +1,16 @@
 /target
 /data_sumatera
+/data
 /node_startup.log
 /node_recovery.log
+/backups
+
+# Cloudflare tunnel credentials — NEVER commit these
+deployment/config.yml
+~/.cloudflared/
+*.json
+*.pem
+
+# Grafana admin credentials override
+deployment/monitoring/grafana/grafana.ini
+

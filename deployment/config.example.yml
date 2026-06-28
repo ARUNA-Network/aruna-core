@@ -1,0 +1,22 @@
+# Cloudflare Tunnel Configuration — Template
+#
+# INSTRUKSI:
+#   1. Salin file ini ke ~/.cloudflared/config.yml
+#   2. Ganti YOUR_TUNNEL_ID_HERE dengan Tunnel ID Anda
+#   3. Ganti rpc.yourdomain.com dengan hostname Anda
+#
+# PERINGATAN:
+#   Jangan commit config.yml yang sudah diisi ke Git!
+#   File ini sudah ada di .gitignore.
+#
+# Cara mendapatkan Tunnel ID:
+#   cloudflared tunnel list
+
+tunnel: YOUR_TUNNEL_ID_HERE
+credentials-file: /etc/cloudflared/YOUR_TUNNEL_ID_HERE.json
+
+ingress:
+  - hostname: rpc.yourdomain.com
+    service: http://node:8080
+
+  - service: http_status:404

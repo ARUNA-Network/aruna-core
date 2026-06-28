@@ -2,7 +2,6 @@ services:
   # ── Development Environment ──────────────────────────────────────────────
   # Full ODE toolchain: Rust 1.96.0, GCC 14, LLVM 18, CMake, RocksDB
   # Usage: docker compose run --rm dev bash
-  #        docker compose run --rm dev cargo test --workspace
   dev:
     build:
       context: .
@@ -25,9 +24,8 @@ services:
       - dev
 
   # ── Node Runtime ─────────────────────────────────────────────────────────
-  # Minimal production node image (no Rust, no compiler)
+  # Minimal production runtime image (no Rust, no compiler)
   # Usage: docker compose up -d node
-  #        docker compose logs -f node
   node:
     build:
       context: .
@@ -35,18 +33,38 @@ services:
     image: ghcr.io/aruna-network/node:local
     container_name: aruna-node
     restart: unless-stopped
+    stop_grace_period: 30s
     ports:
-      - "9000:9000"   # P2P networking
-      - "8080:8080"   # RPC API
+      - "9000:9000"   # P2P — must be open to the internet
+      # RPC port 8080 is NOT exposed externally; cloudflared handles it internally
     volumes:
-      - node-data:/app/data_sumatera
+      - ./data:/app/data_sumatera   # Bind mount for easy access and backup
+    environment:
+      - RUST_LOG=info
     command: ["daemon", "--p2p-port", "9000", "--rpc-port", "8080"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/status"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
+
+  # ── Cloudflare Tunnel ────────────────────────────────────────────────────
+  # Exposes the RPC API securely via Cloudflare without opening port 8080
+  # Prerequisite: configure ~/.cloudflared/config.yml with your tunnel credentials
+  # Usage: docker compose up -d cloudflared
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: aruna-cloudflared
+    restart: unless-stopped
+    depends_on:
+      node:
+        condition: service_healthy
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ${HOME}/.cloudflared:/etc/cloudflared:ro
+    profiles:
+      - production
 
   # ── Test Runner ──────────────────────────────────────────────────────────
   # Runs the full workspace test suite inside the ODE image
@@ -72,8 +90,6 @@ services:
       - test
 
 volumes:
-  node-data:
-    driver: local
   cargo-cache:
     driver: local
   target-cache:
