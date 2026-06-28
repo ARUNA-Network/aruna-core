@@ -6,11 +6,11 @@
 /backups
 
 # Cloudflare tunnel credentials — NEVER commit these
-deployment/config.yml
-~/.cloudflared/
-*.json
-*.pem
+tunnel.env
+*.token
+/etc/cloudflared/
 
 # Grafana admin credentials override
 deployment/monitoring/grafana/grafana.ini
+
 

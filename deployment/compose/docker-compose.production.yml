@@ -1,0 +1,46 @@
+services:
+  # ── ARUNA Node ───────────────────────────────────────────────────────────
+  # Production runtime image — minimal, no Rust compiler.
+  # P2P port 9000 → open to internet (peer discovery).
+  # RPC port 8080 → localhost only (cloudflared.service connects via localhost:8080).
+  node:
+    image: ghcr.io/aruna-network/node:latest
+    container_name: aruna-node
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ports:
+      - "9000:9000"             # P2P — must be open to internet
+      - "127.0.0.1:8080:8080"   # RPC — localhost only
+    volumes:
+      - /opt/aruna-data:/app/data_sumatera
+    environment:
+      - RUST_LOG=info
+    command: ["daemon", "--p2p-port", "9000", "--rpc-port", "8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── Future Services ───────────────────────────────────────────────────────
+  # Uncomment as features are ready:
+
+  # explorer:
+  #   image: ghcr.io/aruna-network/explorer:latest
+  #   container_name: aruna-explorer
+  #   restart: unless-stopped
+  #   ports:
+  #     - "127.0.0.1:3000:3000"
+  #   depends_on:
+  #     node:
+  #       condition: service_healthy
+
+  # metrics:
+  #   image: prom/prometheus:latest
+  #   container_name: aruna-prometheus
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /opt/aruna-monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #   ports:
+  #     - "127.0.0.1:9090:9090"

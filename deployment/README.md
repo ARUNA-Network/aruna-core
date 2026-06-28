@@ -1,206 +1,219 @@
 # ARUNA Node Deployment Guide
 
-> Target: Ubuntu 24.04 LTS Server / VPS  
-> Stack: Docker + Docker Compose + Cloudflare Tunnel
+> **Target**: Ubuntu 24.04 LTS Server / VPS  
+> **Stack**: systemd + Docker Compose + Cloudflare Tunnel
 
 ---
 
-## Architecture
+## Arsitektur
 
 ```
 Internet
     │
     ▼
-Cloudflare DNS
+Cloudflare DNS + CDN
     │
     ▼
-Cloudflare Tunnel Container (cloudflared)
+Cloudflare Tunnel (cloudflared.service)   ← systemd, always alive
+    │                                        tidak terpengaruh docker restart
+    ▼
+http://localhost:8080
     │
     ▼
-http://node:8080   ← internal Docker network
+docker-compose-aruna.service              ← systemd, manages Docker Compose
     │
-    ▼
-ARUNA Node Container (node)
-    │
-    ▼
-RocksDB (./data/)
+    └── aruna-node (container)
+            │
+            └── RocksDB (/opt/aruna-data)
 ```
 
-Port `9000` (P2P) dibuka langsung ke internet. Port `8080` (RPC) **tidak** dibuka ke publik — hanya diakses secara internal oleh cloudflared.
+**Mengapa cloudflared tidak dimasukkan ke Docker Compose?**
+
+Jika cloudflared ada di dalam Compose dan kita menjalankan `docker compose down`, tunnel ikut mati. Padahal yang kita inginkan:
+
+- Node restart → tunnel tetap hidup
+- Saat node hidup kembali → RPC langsung bisa diakses tanpa intervensi manual
+
+Dengan memisahkan keduanya ke systemd, keduanya saling independen.
+
+---
+
+## Struktur File
+
+```
+deployment/
+├── systemd/
+│   ├── cloudflared.service           ← tunnel (independen dari Docker)
+│   └── docker-compose-aruna.service  ← mengawasi docker compose
+├── compose/
+│   └── docker-compose.production.yml ← node runtime (bersih, tanpa cloudflared)
+├── monitoring/
+│   ├── prometheus.yml
+│   ├── grafana/
+│   │   └── datasources.yml
+│   └── docker-compose.monitoring.yml
+├── scripts/
+│   ├── install-node.sh    ← instalasi lengkap dari nol
+│   ├── update-node.sh     ← update node ke versi terbaru
+│   └── healthcheck.sh     ← cek status semua komponen
+└── README.md              ← dokumen ini
+```
 
 ---
 
 ## Prerequisites
 
-- Docker + Docker Compose v2
-- Cloudflare account dengan domain aktif
-- Cloudflare Tunnel sudah dibuat (`cloudflared tunnel create aruna-rpc`)
+- Ubuntu 24.04 LTS (VPS/Server)
+- Akun Cloudflare dengan domain aktif
+- Cloudflare Tunnel sudah dibuat di Cloudflare Dashboard → Zero Trust → Networks → Tunnels
 
 ---
 
-## Step 1 — Clone Repository
+## Quick Install (Satu Perintah)
 
 ```bash
-git clone https://github.com/ARUNA-Network/aruna-core.git
-cd aruna-core
+git clone https://github.com/ARUNA-Network/aruna-core.git /opt/aruna-core
+cd /opt/aruna-core
+sudo bash deployment/scripts/install-node.sh
 ```
+
+Script akan:
+1. Install Docker
+2. Install cloudflared
+3. Minta Cloudflare Tunnel Token → simpan di `/etc/cloudflared/tunnel.env`
+4. Install dan enable kedua systemd service
+5. Start semua service
 
 ---
 
-## Step 2 — Konfigurasi Cloudflare Tunnel
+## Manual Setup (Step-by-Step)
 
-### 2a. Install cloudflared
-
-```bash
-curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
-echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared focal main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
-sudo apt-get update && sudo apt-get install cloudflared
-```
-
-### 2b. Login dan buat tunnel
+### Step 1 — Install Docker
 
 ```bash
-cloudflared tunnel login
-cloudflared tunnel create aruna-rpc
+curl -fsSL https://get.docker.com | sh
+systemctl enable docker && systemctl start docker
 ```
 
-Catat **Tunnel ID** yang diberikan (format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
-
-### 2c. Buat config.yml
-
-Salin template dan isi dengan Tunnel ID Anda:
+### Step 2 — Install cloudflared
 
 ```bash
-cp deployment/config.example.yml ~/.cloudflared/config.yml
-nano ~/.cloudflared/config.yml
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
+    | gpg --dearmor -o /usr/share/keyrings/cloudflare-main.gpg
+echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] \
+https://pkg.cloudflare.com/cloudflared $(lsb_release -cs) main" \
+    > /etc/apt/sources.list.d/cloudflared.list
+apt-get update && apt-get install cloudflared
 ```
 
-Isi sesuai Tunnel ID dan hostname Anda:
-
-```yaml
-tunnel: YOUR_TUNNEL_ID_HERE
-credentials-file: /etc/cloudflared/YOUR_TUNNEL_ID_HERE.json
-
-ingress:
-  - hostname: rpc.yourdomain.com
-    service: http://node:8080
-
-  - service: http_status:404
-```
-
-> ⚠️ **Penting**: Jangan commit `config.yml` ke Git. File ini sudah ada di `.gitignore`.
-
-### 2d. Daftarkan DNS
+### Step 3 — Konfigurasi Cloudflare Tunnel Token
 
 ```bash
-cloudflared tunnel route dns aruna-rpc rpc.yourdomain.com
+mkdir -p /etc/cloudflared
+# Salin token dari Cloudflare Dashboard → Zero Trust → Tunnels → pilih tunnel → Configure
+echo "CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoiXXXXXX..." > /etc/cloudflared/tunnel.env
+chmod 600 /etc/cloudflared/tunnel.env
 ```
 
----
+> **Tidak ada config.yml.** Hostname dan routing diatur sepenuhnya di **Cloudflare Dashboard**.  
+> Tidak ada credentials file. Tidak ada tunnel ID hardcoded.
 
-## Step 3 — Jalankan Node
-
-### Build image
+### Step 4 — Clone Repository
 
 ```bash
-docker compose build node
+git clone https://github.com/ARUNA-Network/aruna-core.git /opt/aruna-core
+mkdir -p /opt/aruna-data
 ```
 
-### Jalankan node + tunnel
+### Step 5 — Install systemd Services
 
 ```bash
-docker compose --profile production up -d
-```
-
-### Cek status
-
-```bash
-docker compose ps
-docker compose logs -f node
-docker compose logs -f cloudflared
+cp /opt/aruna-core/deployment/systemd/cloudflared.service /etc/systemd/system/
+cp /opt/aruna-core/deployment/systemd/docker-compose-aruna.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable cloudflared docker-compose-aruna
+systemctl start cloudflared docker-compose-aruna
 ```
 
 ---
 
-## Step 4 — Verifikasi
-
-### Dari host:
+## Manajemen Service
 
 ```bash
-curl http://localhost:8080/status
+# Status semua komponen
+bash /opt/aruna-core/deployment/scripts/healthcheck.sh
+
+# Log node
+journalctl -u docker-compose-aruna -f
+
+# Log tunnel
+journalctl -u cloudflared -f
+
+# Restart node (tunnel tetap hidup)
+systemctl restart docker-compose-aruna
+
+# Restart tunnel
+systemctl restart cloudflared
+
+# Update ke versi terbaru
+bash /opt/aruna-core/deployment/scripts/update-node.sh
 ```
-
-Harus mengembalikan JSON status node.
-
-### Dari internet:
-
-```bash
-curl https://rpc.yourdomain.com/status
-```
-
-Harus mengembalikan JSON yang sama.
-
----
-
-## Management Commands
-
-| Perintah | Fungsi |
-|---|---|
-| `docker compose --profile production up -d` | Start semua service |
-| `docker compose down` | Stop semua service |
-| `docker compose logs -f node` | Stream log node |
-| `docker compose logs -f cloudflared` | Stream log tunnel |
-| `docker compose restart node` | Restart node |
-| `docker compose pull` | Update image ke versi terbaru |
-
----
-
-## Backup & Restore
-
-```bash
-# Backup blockchain data
-./scripts/backup.sh
-
-# Restore dari backup
-./scripts/restore.sh ./backups/aruna-data-2026-06-29.tar.gz
-
-# Update node ke versi terbaru
-./scripts/update-node.sh
-```
-
----
-
-## Monitoring (Opsional)
-
-Untuk mengaktifkan Prometheus + Grafana:
-
-```bash
-docker compose -f deployment/monitoring/docker-compose.monitoring.yml up -d
-```
-
-Akses Grafana di `http://localhost:3000` (admin/admin).
 
 ---
 
 ## Firewall
 
-Pastikan hanya port yang diperlukan yang terbuka:
-
 ```bash
-sudo ufw allow 9000/tcp   # P2P networking — wajib terbuka ke internet
-sudo ufw deny  8080/tcp   # RPC — ditangani cloudflared, jangan buka ke publik
-sudo ufw allow 22/tcp     # SSH
+sudo ufw allow 22/tcp    # SSH
+sudo ufw allow 9000/tcp  # P2P — wajib terbuka ke internet
+# Port 8080 TIDAK dibuka — bound ke 127.0.0.1, hanya cloudflared yang mengakses
 sudo ufw enable
 ```
 
 ---
 
-## Struktur Data
+## Verifikasi
+
+```bash
+# Dari host server
+curl http://localhost:8080/status
+
+# Dari internet (via Cloudflare Tunnel)
+curl https://rpc.yourdomain.com/status
+```
+
+Keduanya harus mengembalikan JSON status node yang sama.
+
+---
+
+## Multi-VPS Setup
+
+Setiap VPS menggunakan tunnel token yang berbeda dari Cloudflare Dashboard:
 
 ```
-./data/                  ← blockchain data (bind mount)
-~/.cloudflared/          ← cloudflare tunnel credentials (jangan commit!)
-  config.yml             ← tunnel config (gitignored)
-  *.json                 ← tunnel credentials (gitignored)
-./backups/               ← hasil script backup.sh
+VPS 1                          VPS 2
+────────────────────           ────────────────────
+cloudflared.service            cloudflared.service
+  token: TOKEN_VPS1              token: TOKEN_VPS2
+  routing: rpc-1.aruna.network   routing: rpc-2.aruna.network
+    │                              │
+docker-compose-aruna           docker-compose-aruna
+  aruna-node (port 9000)         aruna-node (port 9000)
+```
+
+Setiap tunnel dikonfigurasi di Cloudflare Dashboard secara terpisah. Tidak ada config.yml yang perlu disinkronkan antar VPS.
+
+---
+
+## Data & Backup
+
+```
+/opt/aruna-data/   ← blockchain data (bind mount dari container)
+/opt/aruna-core/   ← source code dan compose files
+/etc/cloudflared/  ← tunnel token (jangan backup ke tempat publik)
+```
+
+```bash
+# Backup blockchain data
+sudo tar -czf aruna-backup-$(date +%Y%m%d).tar.gz /opt/aruna-data/
 ```

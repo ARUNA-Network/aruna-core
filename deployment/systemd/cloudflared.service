@@ -1,0 +1,26 @@
+[Unit]
+Description=Cloudflare Tunnel
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+
+# Token disimpan di /etc/cloudflared/tunnel.env
+# Format isi file: CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoiXXXXXXXX...
+EnvironmentFile=/etc/cloudflared/tunnel.env
+
+ExecStart=/usr/local/bin/cloudflared tunnel \
+    --no-autoupdate \
+    run \
+    --token ${CLOUDFLARE_TUNNEL_TOKEN}
+
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

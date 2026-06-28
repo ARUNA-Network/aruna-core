@@ -25,6 +25,8 @@ services:
 
   # ── Node Runtime ─────────────────────────────────────────────────────────
   # Minimal production runtime image (no Rust, no compiler)
+  # P2P port 9000 is open to internet.
+  # RPC port 8080 is bound to 127.0.0.1 only — cloudflared.service accesses it via localhost.
   # Usage: docker compose up -d node
   node:
     build:
@@ -35,10 +37,10 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     ports:
-      - "9000:9000"   # P2P — must be open to the internet
-      # RPC port 8080 is NOT exposed externally; cloudflared handles it internally
+      - "9000:9000"               # P2P — must be open to internet
+      - "127.0.0.1:8080:8080"     # RPC — localhost only (cloudflared systemd service accesses this)
     volumes:
-      - ./data:/app/data_sumatera   # Bind mount for easy access and backup
+      - ./data:/app/data_sumatera
     environment:
       - RUST_LOG=info
     command: ["daemon", "--p2p-port", "9000", "--rpc-port", "8080"]
@@ -49,25 +51,7 @@ services:
       retries: 3
       start_period: 15s
 
-  # ── Cloudflare Tunnel ────────────────────────────────────────────────────
-  # Exposes the RPC API securely via Cloudflare without opening port 8080
-  # Prerequisite: configure ~/.cloudflared/config.yml with your tunnel credentials
-  # Usage: docker compose up -d cloudflared
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: aruna-cloudflared
-    restart: unless-stopped
-    depends_on:
-      node:
-        condition: service_healthy
-    command: tunnel --config /etc/cloudflared/config.yml run
-    volumes:
-      - ${HOME}/.cloudflared:/etc/cloudflared:ro
-    profiles:
-      - production
-
   # ── Test Runner ──────────────────────────────────────────────────────────
-  # Runs the full workspace test suite inside the ODE image
   # Usage: docker compose run --rm test
   test:
     build:

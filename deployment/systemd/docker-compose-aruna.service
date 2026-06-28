@@ -1,0 +1,37 @@
+[Unit]
+Description=ARUNA Network Node (Docker Compose)
+Documentation=https://github.com/ARUNA-Network/aruna-core
+Requires=docker.service
+After=docker.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+
+# Sesuaikan path ini dengan lokasi clone repository Anda
+WorkingDirectory=/opt/aruna-core
+
+ExecStartPre=/usr/bin/docker compose \
+    -f deployment/compose/docker-compose.production.yml \
+    pull --ignore-pull-failures
+
+ExecStart=/usr/bin/docker compose \
+    -f deployment/compose/docker-compose.production.yml \
+    up --remove-orphans
+
+ExecStop=/usr/bin/docker compose \
+    -f deployment/compose/docker-compose.production.yml \
+    down
+
+# Node memiliki stop_grace_period 30s — beri waktu lebih untuk flush RocksDB
+TimeoutStopSec=60s
+
+Restart=on-failure
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
