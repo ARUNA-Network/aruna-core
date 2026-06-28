@@ -64,16 +64,38 @@ The repository is structured as a Cargo workspace containing modular crates:
 
 ## 🛠️ Official Development Environment (ODE)
 
-To enforce strict determinism and compiler reproducibility, the workspace is aligned to a verified development stack.
+To enforce strict determinism and compiler reproducibility, the workspace is aligned to a verified development stack.  
+📖 See [**docs/ode.md**](docs/ode.md) for the complete specification, build matrix, and phase roadmap.
 
-### Specifications
-- **Operating System**: Ubuntu 24.04 LTS (Noble)
-- **Rust/Cargo**: `1.96.0` (pinned via `rust-toolchain.toml`)
-- **Compilers**: GCC 14 (`gcc-14`/`g++-14`) & LLVM 18 (`clang-18`/`llvm-18`/`libclang-18-dev`)
-- **Build Tools**: CMake 3.30+
+### Official Toolchain
+
+| Tool | Version |
+|---|---|
+| OS | Ubuntu 24.04 LTS |
+| Rust / Cargo | `1.96.0` |
+| GCC | `14` |
+| LLVM / Clang | `18` |
+| CMake | `3.30+` |
+| RocksDB | `8.10.x` |
+
+### Official Build Matrix
+
+| Environment | Status |
+|---|---|
+| GitHub Actions (Ubuntu 24.04) | ✅ Official |
+| GitHub Codespaces | ✅ Official |
+| VS Code Dev Container | ✅ Official |
+| Docker Dev Image (`ghcr.io/aruna-network/dev`) | ✅ Official |
+| Ubuntu Server 24.04 LTS | ✅ Official |
+| Arch Linux | ⚡ Best Effort |
+| Fedora | ⚡ Best Effort |
+| macOS | 🔮 Future |
+| Windows Native | 🔮 Future |
 
 ### VS Code Dev Container & Codespaces
-The project includes a pre-configured Dev Container configuration. Open the project in VS Code and select **"Reopen in Container"** or launch directly in GitHub Codespaces to spawn a container pre-loaded with compiler toolchains, system alternatives, and diagnostic extensions.
+
+Open in VS Code → **"Reopen in Container"** or launch in GitHub Codespaces.  
+The container automatically provisions all compilers, sets required environment variables, and prefetches Cargo dependencies.
 
 ---
 

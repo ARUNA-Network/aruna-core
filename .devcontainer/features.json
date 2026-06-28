@@ -1,0 +1,45 @@
+{
+    "name": "ARUNA Network — Official Development Environment",
+    "description": "Machine-readable toolchain specification for ARUNA Network Core. All environments (CI, Dev Container, Docker, VPS) MUST match these versions to guarantee build reproducibility.",
+    "versions": {
+        "rust": "1.96.0",
+        "cargo": "1.96.0",
+        "llvm": "18",
+        "clang": "18",
+        "gcc": "14",
+        "gxx": "14",
+        "cmake": "3.30",
+        "rocksdb": "8.10.x",
+        "openssl": "3.x",
+        "protobuf": "3.x",
+        "ubuntu": "24.04"
+    },
+    "environment": {
+        "CC": "gcc",
+        "CXX": "g++",
+        "CXXFLAGS": "-include cstdint",
+        "LIBCLANG_PATH": "/usr/lib/llvm-18/lib",
+        "CLANG_PATH": "/usr/bin/clang",
+        "RUSTUP_HOME": "/usr/local/rustup",
+        "CARGO_HOME": "/usr/local/cargo"
+    },
+    "rust_components": [
+        "clippy",
+        "rustfmt",
+        "rust-src"
+    ],
+    "rust_targets": [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu"
+    ],
+    "build_matrix": {
+        "github_actions_ubuntu": "official",
+        "github_codespaces": "official",
+        "docker_dev_container": "official",
+        "ubuntu_server_2404": "official",
+        "arch_linux": "best_effort",
+        "fedora": "best_effort",
+        "macos": "future",
+        "windows_native": "future"
+    }
+}

@@ -3,16 +3,49 @@
     "build": {
         "dockerfile": "Dockerfile"
     },
+    "postCreateCommand": "bash .devcontainer/postCreateCommand.sh",
+    "remoteEnv": {
+        "CXXFLAGS": "-include cstdint",
+        "LIBCLANG_PATH": "/usr/lib/llvm-18/lib",
+        "CLANG_PATH": "/usr/bin/clang",
+        "CC": "gcc",
+        "CXX": "g++"
+    },
+    "forwardPorts": [9000, 8080],
+    "portsAttributes": {
+        "9000": {
+            "label": "ARUNA P2P",
+            "onAutoForward": "silent"
+        },
+        "8080": {
+            "label": "ARUNA RPC",
+            "onAutoForward": "notify"
+        }
+    },
     "customizations": {
         "vscode": {
             "settings": {
-                "rust-analyzer.check.command": "clippy"
+                "rust-analyzer.check.command": "clippy",
+                "rust-analyzer.cargo.features": "all",
+                "rust-analyzer.procMacro.enable": true,
+                "editor.formatOnSave": true,
+                "editor.defaultFormatter": "rust-lang.rust-analyzer",
+                "[rust]": {
+                    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+                },
+                "terminal.integrated.env.linux": {
+                    "CXXFLAGS": "-include cstdint",
+                    "LIBCLANG_PATH": "/usr/lib/llvm-18/lib"
+                }
             },
             "extensions": [
                 "rust-lang.rust-analyzer",
                 "serayuzgur.crates",
                 "tamasfe.even-better-toml",
-                "vadimcn.vscode-lldb"
+                "vadimcn.vscode-lldb",
+                "usernamehw.errorlens",
+                "github.vscode-github-actions",
+                "EditorConfig.EditorConfig"
             ]
         }
     },
