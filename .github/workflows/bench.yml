@@ -1,0 +1,96 @@
+name: ARUNA Nightly Performance Benchmark
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Run nightly at midnight UTC
+  workflow_dispatch: # Enable manual triggers on-demand
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build and Run Release Benchmark
+        run: |
+          CXXFLAGS="-include cstdint" cargo run --release -p aruna-testing --bin performance_benchmark
+
+      - name: Analyze Results & Detect Regressions
+        shell: python
+        run: |
+          import json
+          import sys
+          import os
+
+          # Load standard bench results
+          with open('target/bench_results.json') as f:
+              bench = json.load(f)
+          metrics = bench['metrics']
+
+          # Load stress bench results
+          with open('target/bench_results_stress.json') as f:
+              stress = json.load(f)
+
+          # Extract values
+          tps_exec = metrics['tps_execution_only']
+          block_prod = metrics['avg_block_production_duration_ms']
+          latency = metrics['single_block_propagation_ms']
+          rss = metrics['memory_footprint_rss_mb']
+          db_kb = metrics['database_size_on_disk_kb']
+          db_growth = stress['db_growth_bytes']
+          stress_tps = stress['tps']
+
+          print("=== Nightly Benchmark Metrics ===")
+          print(f"Execution TPS: {tps_exec:.2f}")
+          print(f"Avg Block Production Time: {block_prod:.2f} ms")
+          print(f"Single Block Latency: {latency:.2f} ms")
+          print(f"Memory RSS: {rss:.2f} MB")
+          print(f"Database Size: {db_kb:.2f} KB")
+          print(f"Stress TPS: {stress_tps:.2f}")
+          print(f"Stress DB Growth: {db_growth} bytes")
+
+          # Write Markdown Summary to Step Summary
+          summary = f"""### 🚀 ARUNA Nightly Performance Benchmark Report
+
+| Metric | Measured Value | Regression Limit | Status |
+|---|---|---|---|
+| **Execution TPS** | {tps_exec:.2f} tx/s | >= 100.0 tx/s | {'✅ Pass' if tps_exec >= 100.0 else '❌ Fail (Low TPS)'} |
+| **Block Prod Duration** | {block_prod:.2f} ms | <= 50.0 ms | {'✅ Pass' if block_prod <= 50.0 else '❌ Fail (High Latency)'} |
+| **Single Block Propagation Latency** | {latency:.2f} ms | <= 200.0 ms | {'✅ Pass' if latency <= 200.0 else '❌ Fail (High Latency)'} |
+| **Memory RSS** | {rss:.2f} MB | <= 150.0 MB | {'✅ Pass' if rss <= 150.0 else '❌ Fail (High Memory)'} |
+| **RocksDB disk size** | {db_kb:.2f} KB | <= 20000.0 KB | {'✅ Pass' if db_kb <= 20000.0 else '❌ Fail (Large DB Size)'} |
+| **Stress TPS (10 senders)** | {stress_tps:.2f} tx/s | >= 80.0 tx/s | {'✅ Pass' if stress_tps >= 80.0 else '❌ Fail (Low TPS)'} |
+"""
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as sf:
+              sf.write(summary)
+
+          # Validation / Regression Check
+          errors = []
+          if tps_exec < 100.0:
+              errors.append(f"Execution TPS too low: {tps_exec:.2f} (limit: >= 100.0)")
+          if block_prod > 50.0:
+              errors.append(f"Block production duration too high: {block_prod:.2f} ms (limit: <= 50.0 ms)")
+          if latency > 200.0:
+              errors.append(f"Single block propagation latency too high: {latency:.2f} ms (limit: <= 200.0 ms)")
+          if rss > 150.0:
+              errors.append(f"Memory footprint too high: {rss:.2f} MB (limit: <= 150.0 MB)")
+          if db_kb > 20000.0:
+              errors.append(f"Database size too large: {db_kb:.2f} KB (limit: <= 20000.0 KB)")
+          if stress_tps < 80.0:
+              errors.append(f"Stress TPS too low: {stress_tps:.2f} (limit: >= 80.0)")
+
+          if errors:
+              print("\n🚨 PERFORMANCE REGRESSION DETECTED!")
+              for err in errors:
+                  print(f"  - {err}")
+              sys.exit(1)
+          
+          print("\n✅ All performance metrics passed safely!")
