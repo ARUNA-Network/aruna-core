@@ -6,6 +6,7 @@ use aruna_state::StateManager;
 use aruna_consensus::ConsensusEngine;
 use aruna_mempool::Mempool;
 use aruna_networking::P2PManager;
+use aruna_primitives::Address;
 
 pub mod node_runtime;
 pub mod block_loop;
@@ -34,15 +35,33 @@ impl NodeContext {
         rpc_port: u16,
         chain_id: u32,
     ) -> Self {
+        // Testnet placeholder reward addresses.
+        // Production nodes must load these from config.toml.
+        let miner_addr = Address::from_pubkey_hash([0x01; 20]);
+        let validator_addr = Address::from_pubkey_hash([0x02; 20]);
+        let treasury_addr = Address::from_pubkey_hash([0x03; 20]);
+
         let state_manager = StateManager::new(storage.clone());
-        let consensus_engine = ConsensusEngine::new(state_manager.clone(), storage.clone());
+        let consensus_engine = ConsensusEngine::new(
+            state_manager.clone(),
+            storage.clone(),
+            miner_addr,
+            validator_addr,
+            treasury_addr,
+        );
         let mempool = Arc::new(Mempool::new(50000));
+
+        // Derive node_id from a deterministic testnet placeholder public key.
+        // Production nodes derive this from their Ed25519 node keypair loaded from config.
+        let node_id = aruna_crypto::blake3_hash(&[0x00u8; 32]).0;
+
         let p2p_manager = Arc::new(P2PManager::new(
             storage.clone(),
             consensus_engine.clone(),
             mempool.clone(),
             p2p_port,
             chain_id,
+            node_id,
         ));
 
         Self {

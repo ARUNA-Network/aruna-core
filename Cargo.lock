@@ -84,6 +84,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "aruna-explorer"
+version = "0.1.0"
+dependencies = [
+ "aruna-crypto",
+ "aruna-primitives",
+ "aruna-storage",
+ "axum",
+ "bincode",
+ "hex",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "aruna-mempool"
 version = "0.1.0"
 dependencies = [
@@ -173,6 +188,17 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "aruna-wallet"
+version = "0.1.0"
+dependencies = [
+ "aruna-crypto",
+ "aruna-primitives",
+ "bincode",
+ "hex",
+ "serde_json",
 ]
 
 [[package]]

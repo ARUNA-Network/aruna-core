@@ -64,6 +64,13 @@ impl Ed25519Keypair {
         let signature = self.signing_key.sign(message);
         signature.to_bytes()
     }
+
+    /// Export the 32-byte seed (private scalar). Required for wallet backup.
+    /// The seed is the canonical private key material for this keypair.
+    /// Store securely — anyone with this value controls the associated funds.
+    pub fn seed_bytes(&self) -> [u8; 32] {
+        self.signing_key.to_bytes()
+    }
 }
 
 /// Verifies Ed25519 signatures.

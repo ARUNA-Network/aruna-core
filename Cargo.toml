@@ -10,7 +10,9 @@ members = [
     "crates/node",
     "crates/testing",
     "crates/mempool",
-    "crates/networking"
+    "crates/networking",
+    "crates/wallet-cli",
+    "crates/explorer"
 ]
 
 [workspace.package]

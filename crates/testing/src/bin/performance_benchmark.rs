@@ -64,7 +64,13 @@ fn get_directory_size(path: &std::path::Path) -> u64 {
 fn initialize_node_state(path: &std::path::Path, sender: &Address) -> (Storage, StateManager, ConsensusEngine, Hash) {
     let storage = Storage::open(path).expect("Failed to open storage");
     let state_manager = StateManager::new(storage.clone());
-    let engine = ConsensusEngine::new(state_manager.clone(), storage.clone());
+    let engine = ConsensusEngine::new(
+        state_manager.clone(),
+        storage.clone(),
+        Address::from_pubkey_hash([0x01; 20]),
+        Address::from_pubkey_hash([0x02; 20]),
+        Address::from_pubkey_hash([0x03; 20]),
+    );
 
     // Pre-fund sender
     let mut init_batch = StorageBatch::new();
@@ -103,6 +109,7 @@ fn initialize_node_state(path: &std::path::Path, sender: &Address) -> (Storage, 
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Starting ARUNA Performance Benchmark ===");
+    println!("Running standard benchmark suite...\n");
 
     let path_a = temp_db_path("node_a");
     let path_b = temp_db_path("node_b");
@@ -267,6 +274,195 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== PERFORMANCE REPORT ===");
     println!("{}", serde_json::to_string_pretty(&report)?);
     println!("==========================");
+
+    // Write results to target/bench_results.json for CI tracking
+    let _timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let results_path = "target/bench_results.json";
+    let _ = std::fs::create_dir_all("target");
+    std::fs::write(results_path, serde_json::to_string_pretty(&report)?)?;
+    println!("Benchmark results written to {}", results_path);
+
+    // Run Sprint D: 10-sender stress benchmark
+    bench_1000_tx_10_senders()?;
+
+    println!("\n=== All benchmarks complete ===");
+    Ok(())
+}
+
+// ============================================================================
+// Sprint D — 1000 Transaction / 10 Sender Stress Benchmark
+// ============================================================================
+
+/// Stress benchmark: 10 distinct senders each send 100 transactions.
+/// Transactions are packed into 10 blocks of 100 txs (10 txs per sender per block).
+/// Measures TPS, average block time, DB growth, and peak RSS.
+fn bench_1000_tx_10_senders() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n╔══════════════════════════════════════════════════════╗");
+    println!("║  Sprint D — 1000 TX / 10 Sender Stress Benchmark    ║");
+    println!("╚══════════════════════════════════════════════════════╝");
+
+    let path = temp_db_path("stress_10s");
+    let _cleaner = TempDirCleaner { path: path.clone() };
+
+    // 1. Generate 10 distinct keypairs (10 senders)
+    let senders: Vec<(Ed25519Keypair, [u8; 32], Address)> = (0..10).map(|_| {
+        let kp = Ed25519Keypair::generate();
+        let pk = kp.public_key_bytes();
+        let addr = Address::from_pubkey_hash(derive_pubkey_hash(&pk));
+        (kp, pk, addr)
+    }).collect();
+
+    // Pre-fund all 10 senders on a scratch storage (path) — just to set up genesis accounts
+    let storage_pre = Storage::open(&path)?;
+    let mut init_batch = aruna_storage::StorageBatch::new();
+    for (_, _, addr) in &senders {
+        init_batch.put_account(addr, 100_000_000_000, 0, &Hash::zero(), &Hash::zero());
+    }
+    storage_pre.write_batch(init_batch)?;
+    drop(storage_pre); // release lock on path
+
+    // Measure memory before benchmark
+    let mem_before = get_memory_usage_mb();
+
+    // 2. Generate 10 blocks × 100 txs (10 txs per sender per block)
+    println!("Generating 10 blocks × 100 txs (10 senders × 10 txs/block)...");
+
+    let mut nonces = [0u64; 10];
+    let mut committed_blocks: Vec<(Hash, Block)> = Vec::with_capacity(10);
+    let _ = &committed_blocks; // used only for capacity pre-allocation
+
+    let path2 = temp_db_path("stress_10s_engine");
+    let _cleaner2 = TempDirCleaner { path: path2.clone() };
+    let (storage2, _state_manager2, engine2, genesis_hash) = initialize_node_state(&path2, &senders[0].2);
+
+    // Pre-fund all senders on engine2's storage
+    let mut init2 = aruna_storage::StorageBatch::new();
+    for (_, _, addr) in &senders {
+        init2.put_account(addr, 100_000_000_000, 0, &Hash::zero(), &Hash::zero());
+    }
+    storage2.write_batch(init2)?;
+
+    let start = Instant::now();
+    let mut parent_hash = genesis_hash;
+    let mut parent_state = Hash::zero();
+
+    for block_idx in 0..10usize {
+        let block_start = Instant::now();
+
+        // Build 100 txs: 10 per sender
+        let mut txs = Vec::with_capacity(100);
+        for sender_idx in 0..10usize {
+            for _ in 0..10 {
+                nonces[sender_idx] += 1;
+                let (kp, pk, sender_addr) = &senders[sender_idx];
+                let recipient = Address::from_pubkey_hash([(sender_idx as u8) + 0x10; 20]);
+                let payload = aruna_primitives::TransactionPayload {
+                    nonce: aruna_primitives::Nonce(nonces[sender_idx]),
+                    sender: *sender_addr,
+                    recipient,
+                    amount: 1000,
+                    fee: 5000,
+                    gas_limit: 0,
+                    gas_price: 0,
+                    data: vec![],
+                };
+                let sig = kp.sign(&serialize(&payload).unwrap()).to_vec();
+                txs.push(aruna_primitives::TransactionEnvelope {
+                    payload,
+                    signature_type: aruna_primitives::SignatureType::Ed25519,
+                    signature: sig,
+                    public_key: pk.to_vec(),
+                });
+            }
+        }
+
+        // Pack into block
+        let body = aruna_primitives::BlockBody {
+            transactions: txs,
+            validator_metadata: vec![],
+            ecosystem_metadata: vec![],
+        };
+        let merkle_root = aruna_consensus::ConsensusEngine::calculate_merkle_root(&body.transactions).unwrap();
+        let timestamp_val = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let mut header = aruna_primitives::BlockHeader {
+            version: 1,
+            prev_block_hash: parent_hash,
+            merkle_root,
+            state_root: Hash::zero(),
+            timestamp: timestamp_val + block_idx as u64,
+            difficulty: aruna_primitives::Difficulty(504381424),
+            nonce: 0,
+            validator_root: Hash::zero(),
+            treasury_root: Hash::zero(),
+        };
+        let temp_block = Block { header: header.clone(), body: body.clone() };
+        let state_root = engine2.calculate_state_root(parent_state, &temp_block)?;
+        header.state_root = state_root;
+
+        let block = Block { header, body };
+        let block_hash = engine2.commit_block(&block)?;
+
+        parent_hash = block_hash;
+        parent_state = state_root;
+        committed_blocks.push((block_hash, block));
+
+        let block_elapsed = block_start.elapsed();
+        println!(
+            "  Block {} committed: {} txs in {:.2}ms",
+            block_idx + 1, 100, block_elapsed.as_secs_f64() * 1000.0
+        );
+    }
+
+    let total_elapsed = start.elapsed();
+    let tps = 1000.0 / total_elapsed.as_secs_f64();
+    let avg_block_ms = total_elapsed.as_secs_f64() * 1000.0 / 10.0;
+    let db_before = 0u64; // path2 created fresh — baseline is 0
+    let db_after = get_directory_size(&path2);
+    let mem_after = get_memory_usage_mb();
+
+    assert_eq!(storage2.get_chain_height().unwrap().unwrap(), 10,
+        "Stress benchmark: chain height must be 10 after 10 blocks");
+
+    // Build and write results
+    let timestamp_str = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        .to_string();
+
+    let stress_report = serde_json::json!({
+        "bench": "1000_tx_10_senders",
+        "senders": 10,
+        "tx_per_sender": 100,
+        "total_txs": 1000,
+        "blocks": 10,
+        "tx_per_block": 100,
+        "total_elapsed_ms": total_elapsed.as_millis(),
+        "tps": tps,
+        "avg_block_ms": avg_block_ms,
+        "db_growth_bytes": db_after.saturating_sub(db_before),
+        "mem_before_mb": mem_before,
+        "mem_after_mb": mem_after,
+        "peak_rss_mb": mem_after,
+        "timestamp": timestamp_str,
+        "success": true,
+    });
+
+    println!("\n=== STRESS BENCHMARK REPORT ===");
+    println!("{}", serde_json::to_string_pretty(&stress_report)?);
+    println!("================================");
+    println!("TPS: {:.1} | Avg block: {:.2}ms | DB growth: {} bytes | RSS: {:.1} MB",
+        tps, avg_block_ms, db_after.saturating_sub(db_before), mem_after);
+
+    let _ = std::fs::create_dir_all("target");
+    std::fs::write("target/bench_results_stress.json", serde_json::to_string_pretty(&stress_report)?)?;
+    println!("Stress benchmark results written to target/bench_results_stress.json");
 
     Ok(())
 }

@@ -39,14 +39,37 @@ pub enum ConsensusError {
 pub struct ConsensusEngine {
     state_manager: StateManager,
     storage: Storage,
+    /// Address that receives the PoW miner block reward (70% of block reward + 70% of fees).
+    /// Must be sourced from node configuration — never hardcoded.
+    pub miner_reward_addr: Address,
+    /// Address that receives the PoS validator block reward (25% of block reward + 25% of fees).
+    pub validator_reward_addr: Address,
+    /// Address that receives the treasury allocation (5% of block reward + remaining fees).
+    pub treasury_reward_addr: Address,
 }
 
 impl ConsensusEngine {
     /// Create a new ConsensusEngine instance.
-    pub fn new(state_manager: StateManager, storage: Storage) -> Self {
+    ///
+    /// # Arguments
+    /// * `state_manager` — ledger state manager
+    /// * `storage` — RocksDB storage backend
+    /// * `miner_reward_addr` — address receiving 70% PoW block reward
+    /// * `validator_reward_addr` — address receiving 25% PoS block reward
+    /// * `treasury_reward_addr` — address receiving 5% treasury allocation
+    pub fn new(
+        state_manager: StateManager,
+        storage: Storage,
+        miner_reward_addr: Address,
+        validator_reward_addr: Address,
+        treasury_reward_addr: Address,
+    ) -> Self {
         Self {
             state_manager,
             storage,
+            miner_reward_addr,
+            validator_reward_addr,
+            treasury_reward_addr,
         }
     }
 
@@ -99,9 +122,12 @@ impl ConsensusEngine {
         Ok(block)
     }
 
-    /// Calculate work from compact difficulty (Sumatera Testnet is constant, returns 1).
-    pub fn block_work(_difficulty: aruna_primitives::Difficulty) -> u128 {
-        1
+    /// Calculate accumulated work from compact difficulty (nBits).
+    /// Returns the difficulty value as the work unit, enabling proper most-work fork choice.
+    /// Sumatera Testnet uses constant difficulty (504_381_424), so each block contributes
+    /// exactly that many units of cumulative work to the chain.
+    pub fn block_work(difficulty: aruna_primitives::Difficulty) -> u128 {
+        difficulty.0 as u128
     }
 
     /// Appled block transitions and rewards, writing them to StorageBatch and returning computed state root.
@@ -181,9 +207,9 @@ impl ConsensusEngine {
         let total_pool = miner_reward + validator_reward + treasury_reward + total_fees;
         let total_treasury_payout = total_pool - total_miner_payout - total_validator_payout;
 
-        let (_, miner_addr) = Address::from_bech32m("sum1qyqszqgpqyqszqgpqyqszqgpqyqszqgpe6sslr").unwrap();
-        let (_, validator_addr) = Address::from_bech32m("sum1qgpqyqszqgpqyqszqgpqyqszqgpqyqszg7k454").unwrap();
-        let (_, treasury_addr) = Address::from_bech32m("sumc1qszqgpqyqszqgpqyqszqgpqyqszqgpqypa49fy").unwrap();
+        let miner_addr = self.miner_reward_addr;
+        let validator_addr = self.validator_reward_addr;
+        let treasury_addr = self.treasury_reward_addr;
 
         let mut miner = get_account_local(&miner_addr, &account_cache, &self.state_manager)?;
         miner.balance = miner.balance.checked_add(total_miner_payout)
@@ -270,9 +296,9 @@ impl ConsensusEngine {
         let total_pool = miner_reward + validator_reward + treasury_reward + total_fees;
         let total_treasury_payout = total_pool - total_miner_payout - total_validator_payout;
 
-        let (_, miner_addr) = Address::from_bech32m("sum1qyqszqgpqyqszqgpqyqszqgpqyqszqgpe6sslr").unwrap();
-        let (_, validator_addr) = Address::from_bech32m("sum1qgpqyqszqgpqyqszqgpqyqszqgpqyqszg7k454").unwrap();
-        let (_, treasury_addr) = Address::from_bech32m("sumc1qszqgpqyqszqgpqyqszqgpqyqszqgpqypa49fy").unwrap();
+        let miner_addr = self.miner_reward_addr;
+        let validator_addr = self.validator_reward_addr;
+        let treasury_addr = self.treasury_reward_addr;
 
         let mut miner = get_account_local(&miner_addr, &account_cache, &self.state_manager)?;
         miner.balance = miner.balance.checked_sub(total_miner_payout)
@@ -715,9 +741,9 @@ impl ConsensusEngine {
         let total_pool = miner_reward + validator_reward + treasury_reward + total_fees;
         let total_treasury_payout = total_pool - total_miner_payout - total_validator_payout;
 
-        let (_, miner_addr) = Address::from_bech32m("sum1qyqszqgpqyqszqgpqyqszqgpqyqszqgpe6sslr").unwrap();
-        let (_, validator_addr) = Address::from_bech32m("sum1qgpqyqszqgpqyqszqgpqyqszqgpqyqszg7k454").unwrap();
-        let (_, treasury_addr) = Address::from_bech32m("sumc1qszqgpqyqszqgpqyqszqgpqyqszqgpqypa49fy").unwrap();
+        let miner_addr = self.miner_reward_addr;
+        let validator_addr = self.validator_reward_addr;
+        let treasury_addr = self.treasury_reward_addr;
 
         let mut miner = get_account_local(&miner_addr, &account_cache, &self.state_manager)?;
         miner.balance = miner.balance.checked_add(total_miner_payout)
@@ -870,7 +896,13 @@ mod tests {
         {
             let storage = Storage::open(&path).unwrap();
             let state_manager = StateManager::new(storage.clone());
-            let engine = ConsensusEngine::new(state_manager.clone(), storage);
+            let engine = ConsensusEngine::new(
+                state_manager.clone(),
+                storage,
+                Address::from_pubkey_hash([0x01; 20]),
+                Address::from_pubkey_hash([0x02; 20]),
+                Address::from_pubkey_hash([0x03; 20]),
+            );
 
             // Generate real signing credentials
             let keypair = Ed25519Keypair::generate();
@@ -922,7 +954,13 @@ mod tests {
         {
             let storage = Storage::open(&path).unwrap();
             let state_manager = StateManager::new(storage.clone());
-            let engine = ConsensusEngine::new(state_manager.clone(), storage.clone());
+            let engine = ConsensusEngine::new(
+                state_manager.clone(),
+                storage.clone(),
+                Address::from_pubkey_hash([0x01; 20]),
+                Address::from_pubkey_hash([0x02; 20]),
+                Address::from_pubkey_hash([0x03; 20]),
+            );
 
             let keypair = Ed25519Keypair::generate();
             let pubkey = keypair.public_key_bytes();

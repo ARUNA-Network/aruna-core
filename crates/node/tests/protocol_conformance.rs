@@ -34,7 +34,13 @@ fn temp_db_path(suffix: &str) -> PathBuf {
 fn initialize_node_state(path: &std::path::Path, sender: &Address) -> (Storage, StateManager, ConsensusEngine, Hash) {
     let storage = Storage::open(path).expect("Failed to open storage");
     let state_manager = StateManager::new(storage.clone());
-    let engine = ConsensusEngine::new(state_manager.clone(), storage.clone());
+    let engine = ConsensusEngine::new(
+        state_manager.clone(),
+        storage.clone(),
+        Address::from_pubkey_hash([0x01; 20]),
+        Address::from_pubkey_hash([0x02; 20]),
+        Address::from_pubkey_hash([0x03; 20]),
+    );
 
     // Pre-fund sender in genesis state
     let mut init_batch = StorageBatch::new();
@@ -341,7 +347,13 @@ fn test_fork_handling_reconnect_reorg() {
     let setup_fork_db = |path: &std::path::Path| -> (Storage, StateManager, ConsensusEngine, Hash) {
         let storage = Storage::open(path).expect("Failed to open storage");
         let state_manager = StateManager::new(storage.clone());
-        let engine = ConsensusEngine::new(state_manager.clone(), storage.clone());
+        let engine = ConsensusEngine::new(
+            state_manager.clone(),
+            storage.clone(),
+            Address::from_pubkey_hash([0x01; 20]),
+            Address::from_pubkey_hash([0x02; 20]),
+            Address::from_pubkey_hash([0x03; 20]),
+        );
 
         let mut init_batch = StorageBatch::new();
         init_batch.put_account(&sender_a, 1_000_000, 0, &Hash::zero(), &Hash::zero());

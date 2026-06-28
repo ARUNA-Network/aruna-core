@@ -59,18 +59,24 @@ pub struct P2PManager {
     mempool: Arc<Mempool>,
     p2p_port: u16,
     chain_id: u32,
+    /// This node's unique identity: BLAKE3(node_public_key). Derived externally from the node keypair.
+    node_id: [u8; 32],
     peer_writers: Arc<Mutex<Vec<mpsc::UnboundedSender<P2PMessage>>>>,
 }
 
 impl P2PManager {
     /// Create a new P2PManager instance.
-    pub fn new(storage: Storage, consensus: ConsensusEngine, mempool: Arc<Mempool>, p2p_port: u16, chain_id: u32) -> Self {
+    ///
+    /// # Arguments
+    /// * `node_id` — BLAKE3 hash of the node's Ed25519 public key. Must be unique per node.
+    pub fn new(storage: Storage, consensus: ConsensusEngine, mempool: Arc<Mempool>, p2p_port: u16, chain_id: u32, node_id: [u8; 32]) -> Self {
         Self {
             storage,
             consensus,
             mempool,
             p2p_port,
             chain_id,
+            node_id,
             peer_writers: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -171,7 +177,7 @@ impl P2PManager {
         let our_height = self.storage.get_chain_height().unwrap_or(Some(0)).unwrap_or(0);
         let our_handshake = HandshakeMessage {
             version: 1,
-            node_id: [0u8; 32], // dummy node ID
+            node_id: self.node_id,
             chain_id: ChainId(self.chain_id),
             current_height: our_height,
             capabilities: 1, // FULL_NODE

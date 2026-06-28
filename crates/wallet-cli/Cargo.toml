@@ -1,0 +1,18 @@
+[package]
+name = "aruna-wallet"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ARUNA Network command-line wallet — key management, balance queries, and transaction signing/broadcast."
+
+[[bin]]
+name = "aruna-wallet"
+path = "src/main.rs"
+
+[dependencies]
+aruna-primitives = { path = "../primitives" }
+aruna-crypto = { path = "../crypto" }
+hex = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }

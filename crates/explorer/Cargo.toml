@@ -1,0 +1,22 @@
+[package]
+name = "aruna-explorer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ARUNA Network read-only chain explorer REST API backend."
+
+[[bin]]
+name = "aruna-explorer"
+path = "src/main.rs"
+
+[dependencies]
+aruna-primitives = { path = "../primitives" }
+aruna-crypto = { path = "../crypto" }
+aruna-storage = { path = "../storage" }
+serde_json = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+hex = { workspace = true }
+bincode = { workspace = true }
