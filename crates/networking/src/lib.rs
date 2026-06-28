@@ -70,6 +70,7 @@ pub struct P2PManager {
     /// This node's unique identity: BLAKE3(node_public_key). Derived externally from the node keypair.
     node_id: [u8; 32],
     peer_writers: Arc<Mutex<Vec<mpsc::UnboundedSender<P2PMessage>>>>,
+    connection_handles: Arc<Mutex<Vec<tokio::task::AbortHandle>>>,
 }
 
 impl P2PManager {
@@ -86,7 +87,21 @@ impl P2PManager {
             chain_id,
             node_id,
             peer_writers: Arc::new(Mutex::new(Vec::new())),
+            connection_handles: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Forcefully disconnect all currently connected active peers.
+    pub fn disconnect_all(&self) {
+        let mut handles = self.connection_handles.lock().unwrap();
+        for handle in handles.iter() {
+            handle.abort();
+        }
+        handles.clear();
+
+        let mut writers = self.peer_writers.lock().unwrap();
+        writers.clear();
+        println!("Forced disconnect of all peers on port {}", self.p2p_port);
     }
 
     /// Broadcast a block to all active connected peers.
@@ -147,11 +162,12 @@ impl P2PManager {
                 match listener.accept().await {
                     Ok((stream, peer_addr)) => {
                         let m = manager.clone();
-                        tokio::spawn(async move {
+                        let handle = tokio::spawn(async move {
                             if let Err(e) = m.handle_connection(stream, peer_addr, false).await {
                                 eprintln!("P2P connection error with peer {}: {:?}", peer_addr, e);
                             }
                         });
+                        manager.connection_handles.lock().unwrap().push(handle.abort_handle());
                     }
                     Err(e) => eprintln!("P2P server accept error: {:?}", e),
                 }
@@ -162,13 +178,18 @@ impl P2PManager {
     /// Actively connect to a bootstrap peer.
     pub fn connect_to_peer(self: Arc<Self>, peer_addr: SocketAddr) {
         let manager = self.clone();
+        let m = manager.clone();
         tokio::spawn(async move {
             println!("Actively connecting to peer: {}", peer_addr);
             match TcpStream::connect(peer_addr).await {
                 Ok(stream) => {
-                    if let Err(e) = manager.handle_connection(stream, peer_addr, true).await {
-                        eprintln!("P2P connection error with peer {}: {:?}", peer_addr, e);
-                    }
+                    let m_conn = m.clone();
+                    let handle = tokio::spawn(async move {
+                        if let Err(e) = m_conn.handle_connection(stream, peer_addr, true).await {
+                            eprintln!("P2P connection error with peer {}: {:?}", peer_addr, e);
+                        }
+                    });
+                    m.connection_handles.lock().unwrap().push(handle.abort_handle());
                 }
                 Err(e) => eprintln!("Failed to connect to peer {}: {:?}", peer_addr, e),
             }
@@ -260,14 +281,35 @@ impl P2PManager {
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::WriteZero, e.to_string()))?;
         }
 
+        let mut loop_err = None;
+
         // 3. Main P2P message processing loop
         loop {
             match read_msg(&mut reader).await {
                 Ok(p2p_msg) => match p2p_msg {
                     P2PMessage::Handshake(_) => {
                         eprintln!("Unexpected duplicate handshake from peer {}", peer_addr);
+                        loop_err = Some(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "Duplicate P2P Handshake received after connection establishment",
+                        ));
+                        break;
                     }
                     P2PMessage::SyncRequest(req) => {
+                        if req.end_height < req.start_height {
+                            loop_err = Some(std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                format!("Invalid sync request: end_height {} is less than start_height {}", req.end_height, req.start_height),
+                            ));
+                            break;
+                        }
+                        if req.end_height - req.start_height > 500 {
+                            loop_err = Some(std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                format!("Invalid sync request: range {} blocks exceeds limit of 500 blocks", req.end_height - req.start_height),
+                            ));
+                            break;
+                        }
                         // Peer is requesting blocks. Retrieve them from storage and send response.
                         println!("Received block sync request from peer {} for blocks {} to {}", peer_addr, req.start_height, req.end_height);
                         let mut blocks = Vec::new();
@@ -329,6 +371,13 @@ impl P2PManager {
                     }
                     P2PMessage::BlockBroadcast(block) => {
                         // Received block broadcast (gossip) from peer.
+                        let block_bytes = aruna_primitives::serialize(&block.header).unwrap();
+                        let block_hash = aruna_crypto::blake3_hash(&block_bytes);
+                        if self.storage.get_block_header(&block_hash).unwrap_or(None).is_some() {
+                            // Already have this block, ignore silently early to save CPU
+                            continue;
+                        }
+
                         if let Err(e) = self.consensus.validate_block(&block) {
                             eprintln!("Broadcasted block validation failed from peer {}: {:?}", peer_addr, e);
                         } else {
@@ -387,6 +436,9 @@ impl P2PManager {
         }
 
         writer_task.abort();
+        if let Some(err) = loop_err {
+            return Err(err);
+        }
         Ok(())
     }
 }

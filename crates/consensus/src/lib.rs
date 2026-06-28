@@ -779,7 +779,22 @@ impl ConsensusEngine {
             });
         }
 
-        if block.header.version > 1 || block.header.prev_block_hash != Hash::zero() {
+        if block.header.version > 1 {
+            return Err(ConsensusError::Validation(format!(
+                "Invalid block version: {}, only version 1 is supported",
+                block.header.version
+            )));
+        }
+
+        if block.header.prev_block_hash == Hash::zero() {
+            if let Some(genesis_hash) = self.storage.get_block_hash_by_height(0)? {
+                let header_bytes = serialize(&block.header).map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
+                let block_hash = aruna_crypto::blake3_hash(&header_bytes);
+                if block_hash != genesis_hash {
+                    return Err(ConsensusError::Validation("Genesis block already exists and hash mismatch".to_string()));
+                }
+            }
+        } else {
             let parent_header = self.storage.get_block_header(&block.header.prev_block_hash)?
                 .ok_or_else(|| ConsensusError::Validation(format!(
                     "Parent block header not found for hash {:?}",

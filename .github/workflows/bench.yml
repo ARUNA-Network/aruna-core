@@ -58,17 +58,17 @@ jobs:
           print(f"Stress DB Growth: {db_growth} bytes")
 
           # Write Markdown Summary to Step Summary
-          summary = f"""### 🚀 ARUNA Nightly Performance Benchmark Report
-
-| Metric | Measured Value | Regression Limit | Status |
-|---|---|---|---|
-| **Execution TPS** | {tps_exec:.2f} tx/s | >= 100.0 tx/s | {'✅ Pass' if tps_exec >= 100.0 else '❌ Fail (Low TPS)'} |
-| **Block Prod Duration** | {block_prod:.2f} ms | <= 50.0 ms | {'✅ Pass' if block_prod <= 50.0 else '❌ Fail (High Latency)'} |
-| **Single Block Propagation Latency** | {latency:.2f} ms | <= 200.0 ms | {'✅ Pass' if latency <= 200.0 else '❌ Fail (High Latency)'} |
-| **Memory RSS** | {rss:.2f} MB | <= 150.0 MB | {'✅ Pass' if rss <= 150.0 else '❌ Fail (High Memory)'} |
-| **RocksDB disk size** | {db_kb:.2f} KB | <= 20000.0 KB | {'✅ Pass' if db_kb <= 20000.0 else '❌ Fail (Large DB Size)'} |
-| **Stress TPS (10 senders)** | {stress_tps:.2f} tx/s | >= 80.0 tx/s | {'✅ Pass' if stress_tps >= 80.0 else '❌ Fail (Low TPS)'} |
-"""
+          summary = (
+              "### 🚀 ARUNA Nightly Performance Benchmark Report\n\n"
+              "| Metric | Measured Value | Regression Limit | Status |\n"
+              "|---|---|---|---|\n"
+              f"| **Execution TPS** | {tps_exec:.2f} tx/s | >= 100.0 tx/s | {'✅ Pass' if tps_exec >= 100.0 else '❌ Fail (Low TPS)'} |\n"
+              f"| **Block Prod Duration** | {block_prod:.2f} ms | <= 50.0 ms | {'✅ Pass' if block_prod <= 50.0 else '❌ Fail (High Latency)'} |\n"
+              f"| **Single Block Propagation Latency** | {latency:.2f} ms | <= 200.0 ms | {'✅ Pass' if latency <= 200.0 else '❌ Fail (High Latency)'} |\n"
+              f"| **Memory RSS** | {rss:.2f} MB | <= 150.0 MB | {'✅ Pass' if rss <= 150.0 else '❌ Fail (High Memory)'} |\n"
+              f"| **RocksDB disk size** | {db_kb:.2f} KB | <= 20000.0 KB | {'✅ Pass' if db_kb <= 20000.0 else '❌ Fail (Large DB Size)'} |\n"
+              f"| **Stress TPS (10 senders)** | {stress_tps:.2f} tx/s | >= 80.0 tx/s | {'✅ Pass' if stress_tps >= 80.0 else '❌ Fail (Low TPS)'} |\n"
+          )
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as sf:
               sf.write(summary)
 

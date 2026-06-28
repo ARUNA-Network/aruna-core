@@ -70,6 +70,15 @@ impl Mempool {
             });
         }
 
+        let tx_hash = aruna_crypto::blake3_hash(&tx_bytes);
+        if self.transactions.read().unwrap().contains_key(&tx_hash) {
+            return Err(MempoolError::DuplicateNonce {
+                nonce: tx.payload.nonce.0,
+                existing_fee: tx.payload.fee,
+                required_fee: tx.payload.fee + 1,
+            });
+        }
+
         // 2. Cryptographic Signature Verification
         match tx.signature_type {
             SignatureType::Ed25519 => {
