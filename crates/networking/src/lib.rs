@@ -228,7 +228,8 @@ impl P2PManager {
         // 2. Synchronization check
         // If peer height is greater than ours, initiate a SyncRequest to catch up
         if peer_handshake.current_height > our_height {
-            let start = our_height + 1;
+            // Start sync from a few blocks before our current height to handle potential forks/reorgs
+            let start = our_height.saturating_sub(5).max(1);
             let end = peer_handshake.current_height;
             println!("Initiating sync request for blocks {} to {} from peer {}", start, end, peer_addr);
             

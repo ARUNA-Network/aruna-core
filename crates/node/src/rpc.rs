@@ -355,6 +355,22 @@ async fn get_metrics(
     }))
 }
 
+#[derive(serde::Deserialize)]
+pub struct ConnectPeerRequest {
+    pub addr: String,
+}
+
+async fn post_peer(
+    State(state): State<AppState>,
+    Json(payload): Json<ConnectPeerRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let addr: std::net::SocketAddr = payload.addr.parse()
+        .map_err(|_| (StatusCode::BAD_REQUEST, format!("Invalid peer address '{}'; must be IP:PORT format.", payload.addr)))?;
+
+    state.p2p_manager.clone().connect_to_peer(addr);
+    Ok(StatusCode::OK)
+}
+
 pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/status", get(get_status))
@@ -365,6 +381,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/address/:address", get(get_address_state))
         .route("/transaction/:hash", get(get_transaction_by_hash))
         .route("/metrics", get(get_metrics))
+        .route("/peer", post(post_peer))
         .layer(axum::middleware::from_fn(cors_middleware))
         .with_state(state)
 }

@@ -148,6 +148,7 @@ async fn test_network_determinism_100_txs() {
 
     // Start Node A loops
     network_loop::start_p2p(context_a.clone(), None).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
     block_loop::start_block_producer(context_a.clone());
     let rpc_ctx_a = context_a.clone();
     let rpc_handle_a = tokio::spawn(async move {
