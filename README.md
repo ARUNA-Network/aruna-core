@@ -105,6 +105,104 @@ CXXFLAGS="-include cstdint" cargo run --release -p aruna-testing --bin performan
 
 ---
 
+## 🚢 Deployment
+
+ARUNA uses a **three-image deployment strategy** to cleanly separate concerns across development, compilation, and production runtime.
+
+### Image Architecture
+
+| Image | Tag | Purpose |
+|---|---|---|
+| Development | `ghcr.io/aruna-network/dev` | VS Code, Cursor, Codespaces — full toolchain |
+| Builder | `ghcr.io/aruna-network/builder` | Compiles release binary only |
+| Runtime | `ghcr.io/aruna-network/node` | Minimal Ubuntu + binary + config. No Rust. |
+
+---
+
+### Method 1: One-Command Bootstrap (Recommended)
+
+Clone the repository and run the bootstrap script. It will guide you through choosing Docker or native deployment:
+
+```bash
+git clone https://github.com/ARUNA-Network/aruna-core.git
+cd aruna-core
+./scripts/bootstrap.sh
+```
+
+Or directly specify the mode:
+```bash
+./scripts/bootstrap.sh docker    # Containerized via Docker Compose
+./scripts/bootstrap.sh native    # Bare-metal with systemd service
+```
+
+---
+
+### Method 2: Docker Compose
+
+The fastest path to a running node — no Rust compiler required on host:
+
+```bash
+docker compose up -d --build
+```
+
+This will:
+1. Compile the ARUNA node from source inside the builder stage.
+2. Package only the binary and genesis config into a minimal runtime image.
+3. Start the node daemon on `P2P :9000` and `RPC :8080`.
+4. Persist ledger data in `./data_sumatera/` on your host machine.
+
+```bash
+# View running services
+docker compose ps
+
+# Stream logs
+docker compose logs -f
+
+# Stop the node
+docker compose down
+```
+
+---
+
+### Method 3: Dev Container (VS Code / Codespaces)
+
+Open the project in VS Code and select **"Reopen in Container"**, or open directly in GitHub Codespaces. The Dev Container will automatically provision:
+- GCC 14 + LLVM 18 + CMake
+- Rust `1.96.0` toolchain
+- Rust Analyzer, TOML, crates, and LLDB debugger extensions
+
+Then build and run the node locally:
+```bash
+CXXFLAGS="-include cstdint" cargo run --release -p aruna-node -- daemon --p2p-port 9000 --rpc-port 8080
+```
+
+---
+
+### Method 4: Bare-Metal systemd Service
+
+For production VPS/server deployment on Ubuntu 24.04:
+
+```bash
+sudo ./scripts/install.sh
+sudo systemctl start aruna-node
+```
+
+The install script will:
+1. Install system build dependencies (GCC 14, LLVM 18, CMake, OpenSSL).
+2. Compile and install the binary to `/usr/local/bin/aruna-node`.
+3. Create a `aruna` system user and `/var/lib/aruna-node` data directory.
+4. Register and enable `aruna-node.service` under systemd.
+
+```bash
+# Check node status
+sudo systemctl status aruna-node
+
+# Stream real-time logs
+journalctl -u aruna-node -f
+```
+
+---
+
 ## 🛡️ Byzantine & Protocol Protections
 
 ARUNA Network enforces zero-trust validation rules across network and ledger state layers:

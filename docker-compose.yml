@@ -1,0 +1,13 @@
+services:
+  aruna-node:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: aruna-node
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "8080:8080"
+    volumes:
+      - ./data_sumatera:/app/data_sumatera
+    command: ["daemon", "--p2p-port", "9000", "--rpc-port", "8080"]
