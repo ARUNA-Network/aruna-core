@@ -7,6 +7,8 @@ pub async fn start_rpc_server(context: Arc<NodeContext>) -> Result<(), Box<dyn s
         storage: context.storage.clone(),
         mempool: context.mempool.clone(),
         p2p_manager: context.p2p_manager.clone(),
+        db_path: context.db_path.clone(),
+        start_time: std::time::Instant::now(),
     };
 
     let app = crate::rpc::build_router(app_state);

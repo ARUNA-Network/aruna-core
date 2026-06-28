@@ -236,6 +236,11 @@ impl Mempool {
         self.transactions.read().unwrap().len()
     }
 
+    /// Returns the maximum capacity configuration of this mempool.
+    pub fn capacity(&self) -> usize {
+        self.max_capacity
+    }
+
     /// Returns whether the mempool contains a transaction with the given hash.
     pub fn contains(&self, hash: &Hash) -> bool {
         self.transactions.read().unwrap().contains_key(hash)

@@ -18,6 +18,8 @@ pub struct AppState {
     pub storage: Storage,
     pub mempool: Arc<Mempool>,
     pub p2p_manager: Arc<aruna_networking::P2PManager>,
+    pub db_path: std::path::PathBuf,
+    pub start_time: std::time::Instant,
 }
 
 #[derive(Serialize)]
@@ -296,6 +298,63 @@ async fn get_transaction_by_hash(
     Err((StatusCode::NOT_FOUND, format!("Transaction {} not found", hash_str)))
 }
 
+#[derive(Serialize)]
+pub struct MetricsResponse {
+    pub mempool_size: usize,
+    pub mempool_capacity: usize,
+    pub peer_count: usize,
+    pub database_size_bytes: u64,
+    pub chain_height: u64,
+    pub best_block_hash: String,
+    pub uptime_seconds: u64,
+}
+
+fn get_directory_size(path: &std::path::Path) -> u64 {
+    let mut total_size = 0;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.is_file() {
+                    total_size += metadata.len();
+                } else if metadata.is_dir() {
+                    total_size += get_directory_size(&entry.path());
+                }
+            }
+        }
+    }
+    total_size
+}
+
+async fn get_metrics(
+    State(state): State<AppState>,
+) -> Result<Json<MetricsResponse>, (StatusCode, String)> {
+    let mempool_size = state.mempool.len();
+    let mempool_capacity = state.mempool.capacity();
+    let peer_count = state.p2p_manager.peer_count();
+    let database_size_bytes = get_directory_size(&state.db_path);
+
+    let chain_height = state.storage.get_chain_height()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .unwrap_or(0);
+
+    let best_block_hash = state.storage.get_best_block()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .map(|h| h.to_string())
+        .unwrap_or_else(|| "none".to_string());
+
+    let uptime_seconds = state.start_time.elapsed().as_secs();
+
+    Ok(Json(MetricsResponse {
+        mempool_size,
+        mempool_capacity,
+        peer_count,
+        database_size_bytes,
+        chain_height,
+        best_block_hash,
+        uptime_seconds,
+    }))
+}
+
 pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/status", get(get_status))
@@ -305,6 +364,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/block/:height", get(get_block_by_height))
         .route("/address/:address", get(get_address_state))
         .route("/transaction/:hash", get(get_transaction_by_hash))
+        .route("/metrics", get(get_metrics))
         .layer(axum::middleware::from_fn(cors_middleware))
         .with_state(state)
 }

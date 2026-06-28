@@ -742,3 +742,119 @@ fn test_partition_and_deterministic_reconnect() {
 
     println!("Network partition + reconnect test successful! Heavier chain won, state rolled back cleanly.");
 }
+
+/// Multiple Rapid Restarts Chaos Test.
+///
+/// Simulates a node that experiences consecutive sudden deaths and restarts.
+/// We verify that no database index corruption occurs and all state transitions
+/// remain perfectly consistent and sequential after repeated restarts.
+#[test]
+fn test_multiple_rapid_restarts() {
+    use aruna_state::StateManager;
+    use aruna_consensus::ConsensusEngine;
+    use aruna_primitives::{Address, Hash};
+    use aruna_crypto::Ed25519Keypair;
+
+    let path = temp_db_path();
+    let _cleaner = TempDirCleaner { path: path.clone() };
+
+    let keypair = Ed25519Keypair::generate();
+    let pubkey = keypair.public_key_bytes();
+    let sender = Address::from_pubkey_hash(aruna_crypto::derive_pubkey_hash(&pubkey));
+    let recipient = Address::from_pubkey_hash([0xcc; 20]);
+
+    // Setup helper
+    let setup = |db_path: &std::path::Path, is_init: bool| -> (Storage, StateManager, ConsensusEngine, Hash) {
+        let storage = Storage::open(db_path).expect("Failed to open storage");
+        let state_manager = StateManager::new(storage.clone());
+        let engine = ConsensusEngine::new(
+            state_manager.clone(),
+            storage.clone(),
+            Address::from_pubkey_hash([0x01; 20]),
+            Address::from_pubkey_hash([0x02; 20]),
+            Address::from_pubkey_hash([0x03; 20]),
+        );
+
+        let genesis_hash = if is_init {
+            // Fund sender
+            let mut init = StorageBatch::new();
+            init.put_account(&sender, 10_000_000, 0, &Hash::zero(), &Hash::zero());
+            storage.write_batch(init).unwrap();
+
+            // Genesis setup
+            let genesis_header = BlockHeader {
+                version: 1,
+                prev_block_hash: Hash::zero(),
+                merkle_root: Hash::zero(),
+                state_root: Hash::zero(),
+                timestamp: 1782252000,
+                difficulty: Difficulty(504381424),
+                nonce: 0,
+                validator_root: Hash::zero(),
+                treasury_root: Hash::zero(),
+            };
+            let genesis_body = BlockBody {
+                transactions: vec![],
+                validator_metadata: vec![],
+                ecosystem_metadata: vec![],
+            };
+            let genesis_bytes = aruna_primitives::serialize(&genesis_header).unwrap();
+            let g_hash = aruna_crypto::blake3_hash(&genesis_bytes);
+            storage.put_block_header(&g_hash, &genesis_header).unwrap();
+            storage.put_block_body(&g_hash, &genesis_body).unwrap();
+            storage.put_best_block(&g_hash).unwrap();
+            storage.put_chain_height(0).unwrap();
+            storage.put_cumulative_difficulty(&g_hash, 0).unwrap();
+            storage.put_block_height_by_hash(&g_hash, 0).unwrap();
+            storage.put_block_height_map(0, &g_hash).unwrap();
+            g_hash
+        } else {
+            storage.get_block_hash_by_height(0).unwrap().unwrap()
+        };
+
+        (storage, state_manager, engine, genesis_hash)
+    };
+
+    // 1. Initial setup
+    let mut parent_hash;
+    let mut parent_state = Hash::zero();
+    {
+        let (_storage, _state_manager, _engine, genesis_hash) = setup(&path, true);
+        parent_hash = genesis_hash;
+    }
+
+    // 2. Perform 3 consecutive rapid restart & mining cycles
+    for i in 1u64..=3 {
+        let (storage, _state_manager, engine, _genesis_hash) = setup(&path, false);
+
+        // Verify height before block production
+        assert_eq!(storage.get_chain_height().unwrap().unwrap(), i - 1);
+
+        // Produce and commit a block
+        let (hash, state_root) = build_and_commit_block(
+            &engine, &keypair, &pubkey, sender, recipient,
+            i, 1000, 5000, 1782252000 + i * 30,
+            parent_hash, parent_state,
+        );
+
+        parent_hash = hash;
+        parent_state = state_root;
+
+        // Verify height immediately increases
+        assert_eq!(storage.get_chain_height().unwrap().unwrap(), i);
+
+        // Simulate crash: Drop handles inside loop
+    }
+
+    // 3. Final verification after all restarts
+    let (storage, _state_manager, _engine, _genesis_hash) = setup(&path, false);
+    assert_eq!(storage.get_chain_height().unwrap().unwrap(), 3, "Node height should be exactly 3 after 3 crashes/restarts");
+    assert_eq!(storage.get_best_block().unwrap().unwrap(), parent_hash);
+
+    let (final_bal, final_nonce, _, _) = storage.get_account(&sender).unwrap().unwrap();
+    // 3 transfers of 1000 + 5000 fee = 3 * 6000 = 18000 micro-ARU deducted from 10_000_000
+    assert_eq!(final_bal, 10_000_000 - 18_000);
+    assert_eq!(final_nonce, 3);
+
+    println!("Multiple rapid restarts chaos test passed successfully!");
+}

@@ -29,6 +29,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         CliCommand::Daemon { p2p_port, rpc_port, peer_addr } => {
             println!("ARUNA Core Node starting...");
 
+            let db_dir = if p2p_port == 9000 {
+                "./data_sumatera".to_string()
+            } else {
+                format!("./data_sumatera_{}", p2p_port)
+            };
+            let db_path = std::path::PathBuf::from(db_dir);
+
             let genesis_config = bootstrap::load_genesis_config()?;
             let storage = bootstrap::initialize_database(p2p_port, &genesis_config)?;
 
@@ -37,6 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 p2p_port,
                 rpc_port,
                 genesis_config.genesis.chain_id,
+                db_path,
             );
 
             let runtime = runtime::NodeRuntime::new(context);

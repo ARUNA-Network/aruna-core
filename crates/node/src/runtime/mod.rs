@@ -26,6 +26,7 @@ pub struct NodeContext {
     pub p2p_manager: Arc<P2PManager>,
     pub p2p_port: u16,
     pub rpc_port: u16,
+    pub db_path: std::path::PathBuf,
 }
 
 impl NodeContext {
@@ -34,6 +35,7 @@ impl NodeContext {
         p2p_port: u16,
         rpc_port: u16,
         chain_id: u32,
+        db_path: std::path::PathBuf,
     ) -> Self {
         // Testnet placeholder reward addresses.
         // Production nodes must load these from config.toml.
@@ -72,6 +74,7 @@ impl NodeContext {
             p2p_manager,
             p2p_port,
             rpc_port,
+            db_path,
         }
     }
 }

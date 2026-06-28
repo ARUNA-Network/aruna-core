@@ -104,6 +104,11 @@ impl P2PManager {
         }
     }
 
+    /// Return the count of currently connected active peers.
+    pub fn peer_count(&self) -> usize {
+        self.peer_writers.lock().unwrap().len()
+    }
+
     /// Starts the P2P server to listen for incoming connections.
     pub fn start_server(self: Arc<Self>) {
         let manager = self.clone();
