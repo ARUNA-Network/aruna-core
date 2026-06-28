@@ -329,6 +329,12 @@ impl ConsensusEngine {
             .map_err(|e| ConsensusError::Database(StorageError::Format(e.to_string())))?;
         let block_hash = aruna_crypto::blake3_hash(&header_bytes);
 
+        // If block already exists in storage, return early
+        if self.storage.get_block_header(&block_hash)?.is_some() {
+            println!("Block {:?} already exists in database. Ignoring duplicate.", block_hash);
+            return Ok(block_hash);
+        }
+
         // Retrieve parent's cumulative difficulty
         let parent_cum_diff = if block.header.prev_block_hash == Hash::zero() {
             0_u128

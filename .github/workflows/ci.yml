@@ -215,6 +215,7 @@ jobs:
           CXXFLAGS="-include cstdint" cargo test -p aruna-node --test protocol_conformance
           CXXFLAGS="-include cstdint" cargo test -p aruna-node --test network_conformance
           CXXFLAGS="-include cstdint" cargo test -p aruna-node --test fork_simulation
+          CXXFLAGS="-include cstdint" cargo test -p aruna-node --test byzantine_tests
 
       - name: Run Performance Benchmark
         run: |

@@ -44,6 +44,14 @@ where
     stream.read_exact(&mut len_bytes).await?;
     let len = u32::from_be_bytes(len_bytes) as usize;
     
+    // Safety check: reject packets larger than 4 MB to prevent OOM / Huge Packet DDoS
+    if len > 4 * 1024 * 1024 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Packet length {} exceeds maximum limit of 4 MB", len),
+        ));
+    }
+    
     let mut buf = vec![0u8; len];
     stream.read_exact(&mut buf).await?;
     
