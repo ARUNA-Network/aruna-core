@@ -161,28 +161,34 @@ Or directly specify the mode:
 
 ### Method 2: Docker Compose
 
-The fastest path to a running node — no Rust compiler required on host:
+`docker-compose.yml` menyediakan 3 service yang siap pakai:
 
+| Service | Profile | Tujuan |
+|---|---|---|
+| `node` | *(default)* | Runtime node — minimal, tanpa Rust |
+| `dev` | `dev` | Full ODE toolchain untuk coding |
+| `test` | `test` | Menjalankan seluruh test suite |
+
+**Jalankan node production:**
 ```bash
-docker compose up -d --build
+docker compose up -d node
+docker compose logs -f node
 ```
 
-This will:
-1. Compile the ARUNA node from source inside the builder stage.
-2. Package only the binary and genesis config into a minimal runtime image.
-3. Start the node daemon on `P2P :9000` and `RPC :8080`.
-4. Persist ledger data in `./data_sumatera/` on your host machine.
-
+**Masuk ke dev environment (full toolchain):**
 ```bash
-# View running services
-docker compose ps
-
-# Stream logs
-docker compose logs -f
-
-# Stop the node
-docker compose down
+docker compose run --rm dev bash
+# Di dalam container:
+cargo test --workspace
+cargo build --release -p aruna-node
 ```
+
+**Jalankan test suite:**
+```bash
+docker compose run --rm test
+```
+
+Build artifact di-cache menggunakan named Docker volume (`cargo-cache`, `target-cache`) — recompile berikutnya jauh lebih cepat.
 
 ---
 

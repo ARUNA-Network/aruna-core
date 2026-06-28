@@ -1,13 +1,80 @@
 services:
-  aruna-node:
+  # ── Development Environment ──────────────────────────────────────────────
+  # Full ODE toolchain: Rust 1.96.0, GCC 14, LLVM 18, CMake, RocksDB
+  # Usage: docker compose run --rm dev bash
+  #        docker compose run --rm dev cargo test --workspace
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: ghcr.io/aruna-network/dev:local
+    container_name: aruna-dev
+    volumes:
+      - .:/workspace
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/workspace/target
+    working_dir: /workspace
+    environment:
+      - CXXFLAGS=-include cstdint
+      - LIBCLANG_PATH=/usr/lib/llvm-18/lib
+      - CC=gcc
+      - CXX=g++
+    stdin_open: true
+    tty: true
+    profiles:
+      - dev
+
+  # ── Node Runtime ─────────────────────────────────────────────────────────
+  # Minimal production node image (no Rust, no compiler)
+  # Usage: docker compose up -d node
+  #        docker compose logs -f node
+  node:
     build:
       context: .
       dockerfile: Dockerfile.node
+    image: ghcr.io/aruna-network/node:local
     container_name: aruna-node
     restart: unless-stopped
     ports:
-      - "9000:9000"
-      - "8080:8080"
+      - "9000:9000"   # P2P networking
+      - "8080:8080"   # RPC API
     volumes:
-      - ./data_sumatera:/app/data_sumatera
+      - node-data:/app/data_sumatera
     command: ["daemon", "--p2p-port", "9000", "--rpc-port", "8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Test Runner ──────────────────────────────────────────────────────────
+  # Runs the full workspace test suite inside the ODE image
+  # Usage: docker compose run --rm test
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: ghcr.io/aruna-network/dev:local
+    container_name: aruna-test
+    volumes:
+      - .:/workspace
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/workspace/target
+    working_dir: /workspace
+    environment:
+      - CXXFLAGS=-include cstdint
+      - LIBCLANG_PATH=/usr/lib/llvm-18/lib
+      - CC=gcc
+      - CXX=g++
+    command: ["cargo", "test", "--workspace"]
+    profiles:
+      - test
+
+volumes:
+  node-data:
+    driver: local
+  cargo-cache:
+    driver: local
+  target-cache:
+    driver: local
