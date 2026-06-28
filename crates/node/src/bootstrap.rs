@@ -111,17 +111,34 @@ pub fn initialize_database(
         storage.put_chain_height(0)?;
         storage.put_finalized_block(&genesis_hash)?;
         storage.put_chain_id(config.genesis.chain_id)?;
+
+        // Store genesis cumulative difficulty = 0.
+        // This is mandatory: commit_block() for block 1 reads the parent's
+        // cumulative difficulty to compute the chain's total accumulated work.
+        // A missing entry here causes "Parent cumulative difficulty missing"
+        // on every block production attempt.
+        storage.put_cumulative_difficulty(&genesis_hash, 0)?;
+
     } else {
         println!("Genesis already initialized. Loading existing ledger state...");
     }
 
     // --- Self-Healing Index Backfill ---
+    // Repair any indexes that may be missing from older DB snapshots.
     let best_height = storage.get_chain_height()?.unwrap_or(0);
     for h in 0..=best_height {
         if let Some(hash) = storage.get_block_hash_by_height(h)? {
+            // Backfill height-by-hash index
             if storage.get_block_height_by_hash(&hash)?.is_none() {
-                println!("Backfilling block hash to height index for block #{} ({})", h, hash);
+                println!("Backfilling block hash→height index for block #{} ({})", h, hash);
                 storage.put_block_height_by_hash(&hash, h)?;
+            }
+            // Backfill cumulative difficulty — recover DBs missing the genesis entry.
+            // Only the genesis block (height 0) has a known baseline of 0.
+            // For all other heights we cannot reconstruct without traversing headers.
+            if h == 0 && storage.get_cumulative_difficulty(&hash)?.is_none() {
+                println!("Backfilling missing cumulative difficulty for genesis block");
+                storage.put_cumulative_difficulty(&hash, 0)?;
             }
         }
     }
