@@ -1,4 +1,4 @@
-import { api } from '../../services/api';
+import { search } from '../../services/api';
 
 export function setupSearchBar(formId: string, inputId: string): void {
   const form = document.getElementById(formId) as HTMLFormElement | null;
@@ -11,7 +11,7 @@ export function setupSearchBar(formId: string, inputId: string): void {
     if (!q) return;
 
     try {
-      const results = await api.search(q);
+      const results = await search(q);
       if (results.length === 0) {
         alert('No results found for: ' + q);
         return;

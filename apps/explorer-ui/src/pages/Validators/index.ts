@@ -1,4 +1,4 @@
-import { api } from '../../services/api';
+import { getNetwork } from '../../services/api';
 import { renderHeader } from '../../components/Header';
 import { renderFooter } from '../../components/Footer';
 import { escHtml } from '../../utils/format';
@@ -22,7 +22,7 @@ function showError(containerId: string, message: string) {
 
 async function loadNodesList() {
   try {
-    const data = await api.network();
+    const data = await getNetwork();
     const validators = data.validators || { active_validators_count: 1, reward_address: "" };
 
     const rows = `

@@ -1,4 +1,4 @@
-import { api } from '../../services/api';
+import { getBlock, getLatestBlock } from '../../services/api';
 import { renderHeader } from '../../components/Header';
 import { renderFooter } from '../../components/Footer';
 import { setupSearchBar } from '../../components/SearchBar';
@@ -6,6 +6,13 @@ import { numFmt, timestamp, escHtml, shortHash, microAruToAru } from '../../util
 import { Block, Transaction } from '../../types';
 
 const el = (id: string) => document.getElementById(id);
+
+// Append auto-init check to trigger initialization if element is present
+if (typeof document !== 'undefined' && document.getElementById('block-detail-card')) {
+  document.addEventListener('DOMContentLoaded', () => {
+    initBlock();
+  });
+}
 
 function setText(id: string, text: string) {
   const e = el(id);
@@ -69,11 +76,11 @@ async function loadBlockDetail() {
   let block: Block;
   try {
     if (hash) {
-      block = await api.blockByHash(hash);
+      block = await getBlock(hash);
     } else if (height !== null && height !== undefined) {
-      block = await api.blockByHeight(Number(height));
+      block = await getBlock(Number(height));
     } else {
-      block = await api.blockLatest();
+      block = await getLatestBlock();
     }
   } catch (err) {
     showError('block-detail-card', (err as Error).message);

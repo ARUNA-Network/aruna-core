@@ -1,4 +1,4 @@
-import { api } from '../../services/api';
+import { getStatus, getNetwork } from '../../services/api';
 import { renderHeader } from '../../components/Header';
 import { renderFooter } from '../../components/Footer';
 import { numFmt, escHtml } from '../../utils/format';
@@ -40,7 +40,7 @@ function detailRowMono(label: string, value: string): string {
 
 async function loadNetworkStatus() {
   try {
-    const stats = await api.status();
+    const stats = await getStatus();
     const html = `
       ${detailRow('Network Name', stats.node ? stats.node.network : 'Sumatera')}
       ${detailRow('Chain ID', stats.node ? String(stats.node.chain_id) : '7777')}
@@ -59,7 +59,7 @@ async function loadNetworkStatus() {
 
 async function loadPeersList() {
   try {
-    const data = await api.network();
+    const data = await getNetwork();
     const peers = data.peers || [];
     if (peers.length === 0) {
       setHtml('peers-list-panel', `

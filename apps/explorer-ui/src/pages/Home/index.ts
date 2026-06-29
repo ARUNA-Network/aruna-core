@@ -1,4 +1,4 @@
-import { api } from '../../services/api';
+import { getStatus, getLatestBlock, getBlocks } from '../../services/api';
 import { renderHeader } from '../../components/Header';
 import { renderFooter } from '../../components/Footer';
 import { setupSearchBar } from '../../components/SearchBar';
@@ -92,7 +92,7 @@ function drawDifficultyChart(blocks: Block[]): void {
 async function loadDashboard() {
   // 1. Load Stats
   try {
-    const stats = await api.stats();
+    const stats = await getStatus();
     setText('stat-height', numFmt(stats.height));
     setText('stat-txs', numFmt(stats.total_tx_count));
     setText('stat-time', timeAgo(stats.last_block_time));
@@ -103,7 +103,7 @@ async function loadDashboard() {
 
   // 2. Load Latest Block Detail Card
   try {
-    const latest = await api.blockLatest();
+    const latest = await getLatestBlock();
     if (latest) {
       const html = `
         ${detailRow('Height', `#${numFmt(latest.height)}`)}
@@ -120,7 +120,7 @@ async function loadDashboard() {
 
   // 3. Load Latest Transactions List
   try {
-    const latest = await api.blockLatest();
+    const latest = await getLatestBlock();
     const txs = latest.transactions || [];
     if (txs.length === 0) {
       setHtml('latest-txs-list', '<div class="empty-state">No transactions in the latest block.</div>');
@@ -133,7 +133,7 @@ async function loadDashboard() {
 
   // 4. Draw difficulty chart
   try {
-    const data = await api.blocks(10, 0);
+    const data = await getBlocks(10, 0);
     drawDifficultyChart(data);
   } catch (err) {
     console.warn('Failed to load blocks for chart:', err);

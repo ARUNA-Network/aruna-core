@@ -1,4 +1,4 @@
-import { api } from '../../services/api';
+import { getTransaction } from '../../services/api';
 import { renderHeader } from '../../components/Header';
 import { renderFooter } from '../../components/Footer';
 import { setupSearchBar } from '../../components/SearchBar';
@@ -56,7 +56,7 @@ async function loadTxDetail() {
   }
 
   try {
-    const tx = await api.transaction(hash);
+    const tx = await getTransaction(hash);
     setText('tx-hash-heading', tx.hash);
     setText('breadcrumb-id', shortHash(tx.hash));
 

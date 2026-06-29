@@ -12,29 +12,41 @@ async function apiFetch<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export const api = {
-  stats: (): Promise<Stats> =>
-    apiFetch<Stats>('/stats'),
-  status: (): Promise<Stats> =>
-    apiFetch<Stats>('/status'),
-  blocks: (limit: number, offset: number): Promise<Block[]> =>
-    apiFetch<Block[]>(`/blocks?limit=${limit}&offset=${offset}`),
-  blockLatest: (): Promise<Block> =>
-    apiFetch<Block>('/block/latest'),
-  blockByHeight: (height: number): Promise<Block> =>
-    apiFetch<Block>(`/block/${height}`),
-  blockByHash: (hash: string): Promise<Block> =>
-    apiFetch<Block>(`/block/hash/${hash}`),
-  transaction: (hash: string): Promise<Transaction> =>
-    apiFetch<Transaction>(`/transaction/${hash}`),
-  address: (addr: string, limit: number, offset: number): Promise<AddressData> =>
-    apiFetch<AddressData>(`/address/${addr}?limit=${limit}&offset=${offset}`),
-  search: (q: string): Promise<SearchResult[]> =>
-    apiFetch<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
-  network: (): Promise<NetworkData> =>
-    apiFetch<NetworkData>('/network').catch(() => ({
-      status: 'offline',
-      peers: [],
-      validators: { active_validators_count: 1, reward_address: "" }
-    })),
-};
+export async function getStatus(): Promise<Stats> {
+  return apiFetch<Stats>('/status');
+}
+
+export async function getLatestBlock(): Promise<Block> {
+  return apiFetch<Block>('/block/latest');
+}
+
+export async function getBlock(heightOrHash: string | number): Promise<Block> {
+  if (typeof heightOrHash === 'number' || /^\d+$/.test(String(heightOrHash))) {
+    return apiFetch<Block>(`/block/${heightOrHash}`);
+  }
+  return apiFetch<Block>(`/block/hash/${heightOrHash}`);
+}
+
+export async function getTransaction(hash: string): Promise<Transaction> {
+  return apiFetch<Transaction>(`/transaction/${hash}`);
+}
+
+export async function getAddress(addr: string, limit = 20, offset = 0): Promise<AddressData> {
+  return apiFetch<AddressData>(`/address/${addr}?limit=${limit}&offset=${offset}`);
+}
+
+export async function getBlocks(limit: number, offset: number): Promise<Block[]> {
+  return apiFetch<Block[]>(`/blocks?limit=${limit}&offset=${offset}`);
+}
+
+export async function getNetwork(): Promise<NetworkData> {
+  return apiFetch<NetworkData>('/network').catch(() => ({
+    status: 'offline',
+    peers: [],
+    validators: { active_validators_count: 1, reward_address: "" }
+  }));
+}
+
+export async function search(q: string): Promise<SearchResult[]> {
+  return apiFetch<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`);
+}

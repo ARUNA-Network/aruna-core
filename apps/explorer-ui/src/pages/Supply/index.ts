@@ -1,4 +1,4 @@
-import { api } from '../../services/api';
+import { getStatus } from '../../services/api';
 import { renderHeader } from '../../components/Header';
 import { renderFooter } from '../../components/Footer';
 import { numFmt, escHtml } from '../../utils/format';
@@ -31,7 +31,7 @@ function detailRow(label: string, valueHtml: string): string {
 
 async function loadSupplyStats() {
   try {
-    const stats = await api.stats();
+    const stats = await getStatus();
     // Calculations according to ARUNA Economic Constitution
     const maxSupply = 1_000_000_000; // 1 Billion ARU
     

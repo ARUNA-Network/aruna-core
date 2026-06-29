@@ -1,4 +1,4 @@
-import { api } from '../../services/api';
+import { getAddress } from '../../services/api';
 import { renderHeader } from '../../components/Header';
 import { renderFooter } from '../../components/Footer';
 import { setupSearchBar } from '../../components/SearchBar';
@@ -55,7 +55,7 @@ async function loadAddressDetail() {
   setText('breadcrumb-id', shortHash(addr));
 
   try {
-    const data = await api.address(addr, 20, 0);
+    const data = await getAddress(addr, 20, 0);
     setText('addr-balance', `${microAruToAru(data.balance)} ARU`);
     setText('addr-nonce', numFmt(data.nonce));
     setText('addr-updated', numFmt(data.updated_at_block));
