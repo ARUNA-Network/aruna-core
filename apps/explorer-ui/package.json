@@ -1,0 +1,8 @@
+{
+  "name": "aruna-explorer-ui",
+  "version": "1.0.0",
+  "description": "ARUNA Network Block Explorer UI",
+  "scripts": {
+    "build": "echo 'Static assets ready.'"
+  }
+}
