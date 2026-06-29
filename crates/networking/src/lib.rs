@@ -74,6 +74,8 @@ pub struct P2PManager {
     peer_addresses: Arc<Mutex<std::collections::HashSet<SocketAddr>>>,
     /// Highest block height reported by connected peers during P2P handshake.
     pub max_peer_height: Arc<std::sync::atomic::AtomicU64>,
+    /// File path to load and persist successfully connected peer addresses.
+    pub peers_file: Option<std::path::PathBuf>,
 }
 
 impl P2PManager {
@@ -81,7 +83,15 @@ impl P2PManager {
     ///
     /// # Arguments
     /// * `node_id` — BLAKE3 hash of the node's Ed25519 public key. Must be unique per node.
-    pub fn new(storage: Storage, consensus: ConsensusEngine, mempool: Arc<Mempool>, p2p_port: u16, chain_id: u32, node_id: [u8; 32]) -> Self {
+    pub fn new(
+        storage: Storage,
+        consensus: ConsensusEngine,
+        mempool: Arc<Mempool>,
+        p2p_port: u16,
+        chain_id: u32,
+        node_id: [u8; 32],
+        peers_file: Option<std::path::PathBuf>,
+    ) -> Self {
         Self {
             storage,
             consensus,
@@ -93,6 +103,7 @@ impl P2PManager {
             connection_handles: Arc::new(Mutex::new(Vec::new())),
             peer_addresses: Arc::new(Mutex::new(std::collections::HashSet::new())),
             max_peer_height: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            peers_file,
         }
     }
 
@@ -158,6 +169,35 @@ impl P2PManager {
     /// Return the maximum peer height reported.
     pub fn max_peer_height(&self) -> u64 {
         self.max_peer_height.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Save a peer address to the persistent peer storage file.
+    pub fn save_peer(&self, addr: SocketAddr) {
+        if let Some(ref path) = self.peers_file {
+            let mut peers = self.load_peers_from_file().unwrap_or_default();
+            if !peers.contains(&addr) {
+                peers.push(addr);
+                if let Ok(json) = serde_json::to_string_pretty(&peers) {
+                    if let Err(e) = std::fs::write(path, json) {
+                        eprintln!("Failed to write peers to file {:?}: {:?}", path, e);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Load peer addresses from the persistent peer storage file.
+    pub fn load_peers_from_file(&self) -> Result<Vec<SocketAddr>, Box<dyn std::error::Error>> {
+        if let Some(ref path) = self.peers_file {
+            if !path.exists() {
+                return Ok(Vec::new());
+            }
+            let data = std::fs::read_to_string(path)?;
+            let peers: Vec<SocketAddr> = serde_json::from_str(&data)?;
+            Ok(peers)
+        } else {
+            Ok(Vec::new())
+        }
     }
 
     /// Starts the P2P server to listen for incoming connections.
@@ -282,6 +322,7 @@ impl P2PManager {
             writers.push(tx.clone());
             let mut addrs = self.peer_addresses.lock().unwrap();
             addrs.insert(peer_addr);
+            self.save_peer(peer_addr);
         }
 
         // 2. Synchronization check

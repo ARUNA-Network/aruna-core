@@ -66,6 +66,7 @@ impl NodeContext {
             p2p_port,
             chain_id,
             node_id,
+            Some(db_path.join("peers.json")),
         ));
 
         Self {
