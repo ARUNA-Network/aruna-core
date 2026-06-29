@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aruna-node
+  labels:
+    app: aruna-node
+spec:
+  ports:
+    - port: 9000
+      name: p2p
+    - port: 8080
+      name: rpc
+  clusterIP: None
+  selector:
+    app: aruna-node
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: aruna-node
+spec:
+  serviceName: "aruna-node"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aruna-node
+  template:
+    metadata:
+      labels:
+        app: aruna-node
+    spec:
+      containers:
+        - name: validator
+          image: arunanetwork/aruna-node:latest
+          command:
+            - "aruna-node"
+            - "--p2p-port"
+            - "9000"
+            - "--rpc-port"
+            - "8080"
+          ports:
+            - containerPort: 9000
+              name: p2p
+            - containerPort: 8080
+              name: rpc
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1000m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+          volumeMounts:
+            - name: data-sumatera
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data-sumatera
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 50Gi
