@@ -5,7 +5,8 @@ services:
   dev:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: docker/node/Dockerfile
+      target: dev
     image: ghcr.io/aruna-network/dev:local
     container_name: aruna-dev
     volumes:
@@ -31,7 +32,7 @@ services:
   node:
     build:
       context: .
-      dockerfile: Dockerfile.node
+      dockerfile: docker/node/Dockerfile
     image: ghcr.io/aruna-network/node:local
     container_name: aruna-node
     restart: unless-stopped
@@ -80,7 +81,7 @@ services:
   indexer:
     build:
       context: .
-      dockerfile: Dockerfile.node
+      dockerfile: docker/node/Dockerfile
     image: ghcr.io/aruna-network/node:local
     container_name: aruna-indexer
     restart: unless-stopped
@@ -103,7 +104,7 @@ services:
   explorer:
     build:
       context: .
-      dockerfile: Dockerfile.node
+      dockerfile: docker/node/Dockerfile
     image: ghcr.io/aruna-network/node:local
     container_name: aruna-explorer
     restart: unless-stopped
@@ -131,7 +132,8 @@ services:
   test:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: docker/node/Dockerfile
+      target: dev
     image: ghcr.io/aruna-network/dev:local
     container_name: aruna-test
     volumes:
