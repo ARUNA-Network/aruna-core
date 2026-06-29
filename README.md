@@ -65,7 +65,7 @@ The repository is structured as a Cargo workspace containing modular crates:
 ## 🛠️ Official Development Environment (ODE)
 
 To enforce strict determinism and compiler reproducibility, the workspace is aligned to a verified development stack.  
-📖 See [**docs/ode.md**](docs/ode.md) for the complete specification, build matrix, and phase roadmap.
+📖 See the [**Official Development Environment Policy**](docs/development/official-development-environment.md) for the complete specification, enforcement rules, and build matrix.
 
 ### Official Toolchain
 
@@ -85,10 +85,10 @@ To enforce strict determinism and compiler reproducibility, the workspace is ali
 | GitHub Actions (Ubuntu 24.04) | ✅ Official |
 | GitHub Codespaces | ✅ Official |
 | VS Code Dev Container | ✅ Official |
-| Docker Dev Image (`ghcr.io/aruna-network/dev`) | ✅ Official |
+| Docker ODE Image (`ghcr.io/aruna-network/ode`) | ✅ Official |
 | Ubuntu Server 24.04 LTS | ✅ Official |
-| Arch Linux | ⚡ Best Effort |
-| Fedora | ⚡ Best Effort |
+| Arch Linux | ⚡ Best Effort (Bugs not prioritized) |
+| Fedora | ⚡ Best Effort (Bugs not prioritized) |
 | macOS | 🔮 Future |
 | Windows Native | 🔮 Future |
 
@@ -135,9 +135,9 @@ ARUNA uses a **three-image deployment strategy** to cleanly separate concerns ac
 
 | Image | Tag | Purpose |
 |---|---|---|
-| Development | `ghcr.io/aruna-network/dev` | VS Code, Cursor, Codespaces — full toolchain |
-| Builder | `ghcr.io/aruna-network/builder` | Compiles release binary only |
-| Runtime | `ghcr.io/aruna-network/node` | Minimal Ubuntu + binary + config. No Rust. |
+| Development (ODE) | `ghcr.io/aruna-network/ode` | VS Code, Cursor, Codespaces, CI — full build toolchain |
+| Builder | `ghcr.io/aruna-network/node-builder` | Compiles release binary inside the ODE environment |
+| Runtime | `ghcr.io/aruna-network/node-runtime` | Minimal Ubuntu + binary + config. No Rust/compilers. |
 
 ---
 
