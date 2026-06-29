@@ -1,0 +1,274 @@
+/* ── ARUNA Faucet Stylesheet ────────────────────────────────────────────── */
+/* Dark mode, premium brand aesthetics, glassmorphism card                  */
+
+:root {
+  --brand-primary:    hsl(258, 85%, 65%);
+  --brand-secondary:  hsl(195, 90%, 55%);
+  --brand-accent:     hsl(45, 100%, 58%);
+  --brand-glow:       hsla(258, 85%, 65%, 0.35);
+
+  --bg-base:          hsl(222, 30%, 6%);
+  --bg-elevated:      hsl(225, 28%, 10%);
+  --bg-panel:         hsl(224, 26%, 13%);
+  --border:           hsla(224, 30%, 50%, 0.12);
+  --border-bright:    hsla(258, 70%, 65%, 0.30);
+
+  --text-primary:     hsl(220, 30%, 95%);
+  --text-secondary:   hsl(220, 20%, 65%);
+  --text-muted:       hsl(220, 15%, 45%);
+
+  --success:          hsl(142, 72%, 48%);
+  --error:            hsl(0, 80%, 60%);
+
+  --r-md:  12px;
+  --r-lg:  20px;
+  --r-xl:  28px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-image:
+    radial-gradient(ellipse 60% 40% at 50% -10%, hsla(258, 80%, 30%, 0.20), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 80%, hsla(195, 80%, 30%, 0.08), transparent);
+}
+
+.container {
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Navbar */
+.navbar {
+  border-bottom: 1px solid var(--border);
+  background: hsla(222, 30%, 6%, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.logo-icon {
+  font-size: 24px;
+  color: var(--brand-primary);
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.logo-name {
+  font-weight: 800;
+  font-size: 15px;
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.logo-sub {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.nav-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: hsla(258, 80%, 65%, 0.15);
+  border: 1px solid hsla(258, 80%, 65%, 0.3);
+  color: var(--brand-primary);
+}
+
+/* Faucet Layout */
+.page-faucet {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-top: 40px;
+  padding-bottom: 60px;
+}
+
+.faucet-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.faucet-header h1 {
+  font-size: 36px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, var(--text-primary) 30%, var(--brand-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.faucet-header p {
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.faucet-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 32px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+}
+
+.form-group {
+  margin-bottom: 24px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-group input {
+  width: 100%;
+  height: 48px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 15px;
+  padding: 0 16px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px hsla(258, 85%, 65%, 0.15);
+}
+
+.input-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+.input-hint code {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--brand-secondary);
+}
+
+.captcha-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+button[type="submit"] {
+  width: 100%;
+  height: 48px;
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+  border: none;
+  border-radius: var(--r-md);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+button[type="submit"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px var(--brand-glow);
+}
+
+/* Status Panel */
+.status-panel {
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-icon {
+  font-size: 32px;
+}
+
+.status-message {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-tx {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--brand-secondary);
+  word-break: break-all;
+  background: var(--bg-elevated);
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+}
+
+.status-panel.success .status-icon { color: var(--success); }
+.status-panel.error .status-icon { color: var(--error); }
+
+.hidden { display: none !important; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Footer */
+.footer {
+  border-top: 1px solid var(--border);
+  padding: 24px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.footer-inner {
+  display: flex;
+  justify-content: space-between;
+}
+
+.footer-links a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.footer-links a:hover {
+  color: var(--brand-primary);
+}

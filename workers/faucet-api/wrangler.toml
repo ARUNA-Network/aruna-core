@@ -1,0 +1,13 @@
+name = "aruna-faucet-api"
+main = "src/index.js"
+compatibility_date = "2024-03-01"
+
+[vars]
+# Internal Node RPC URL accessible via Cloudflare Tunnel
+NODE_RPC_URL = "http://localhost:8080"
+# Faucet token amount per request: 10 ARU (10_000_000 micro-ARU)
+FAUCET_AMOUNT_MICRO = "10000000"
+
+[[kv_namespaces]]
+binding = "FAUCET_LIMITS"
+id = "faucet_limits_kv_id"

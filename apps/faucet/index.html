@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARUNA Network — Testnet Faucet</title>
+  <meta name="description" content="Request testnet ARU tokens for the ARUNA Network Sumatera Testnet." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo" aria-label="ARUNA Faucet Home">
+        <div class="logo-icon">⬡</div>
+        <div class="logo-text">
+          <span class="logo-name">ARUNA</span>
+          <span class="logo-sub">Faucet</span>
+        </div>
+      </a>
+      <div class="nav-badge">Sumatera Testnet</div>
+    </div>
+  </nav>
+
+  <!-- Faucet Container -->
+  <main class="container page-faucet">
+    <div class="faucet-header">
+      <h1>Testnet Faucet</h1>
+      <p>Request free ARU testnet tokens to develop and test smart contracts and transactions.</p>
+    </div>
+
+    <section class="faucet-card" aria-label="Token Request Form">
+      <form id="faucet-form">
+        <div class="form-group">
+          <label for="address-input">Sumatera Address</label>
+          <input
+            id="address-input"
+            type="text"
+            placeholder="e.g. sum1..."
+            autocomplete="off"
+            required
+            aria-required="true"
+          />
+          <span class="input-hint">Address must start with regional prefix <code>sum1</code></span>
+        </div>
+
+        <!-- Captcha placeholder (Cloudflare Turnstile) -->
+        <div class="form-group captcha-wrap">
+          <div class="cf-turnstile" data-sitekey="1x000000000000000000001"></div>
+        </div>
+
+        <button type="submit" id="submit-btn">
+          <span>Request 10 ARU</span>
+        </button>
+      </form>
+
+      <!-- Status Panel -->
+      <div id="status-panel" class="status-panel hidden" role="region" aria-live="polite">
+        <div class="status-icon" id="status-icon">⏳</div>
+        <div class="status-message" id="status-message">Processing your request...</div>
+        <div class="status-tx mono hidden" id="status-tx-hash"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer" role="contentinfo">
+    <div class="container footer-inner">
+      <span>© 2025 ARUNA Network — <em>Dari Rakyat. Oleh Rakyat. Untuk Rakyat.</em></span>
+      <span class="footer-links">
+        <a href="https://github.com/ARUNA-Network/aruna-core" target="_blank" rel="noopener">GitHub</a>
+      </span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
