@@ -12,6 +12,7 @@ use axum::{
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
+use tower_http::trace::TraceLayer;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -25,10 +26,57 @@ pub struct AppState {
     pub rpc_requests: Arc<std::sync::atomic::AtomicU64>,
 }
 
+/// Full node status — usable as a liveness + readiness signal by Explorer, SDK, and monitoring.
 #[derive(Serialize)]
 pub struct StatusResponse {
+    /// Network name ("sumatera", "kalimantan", etc.)
     pub network: String,
+    /// Node software version
+    pub version: String,
+    /// Chain ID
+    pub chain_id: u32,
+    /// Current canonical chain height
     pub height: u64,
+    /// Hex-encoded hash of the best known block
+    pub best_block: String,
+    /// Number of currently active P2P peer connections
+    pub peer_count: usize,
+    /// Node uptime in seconds since process start
+    pub uptime_seconds: u64,
+    /// Whether the node is synced to the network tip
+    pub synced: bool,
+}
+
+async fn get_status(
+    State(state): State<AppState>,
+) -> Result<Json<StatusResponse>, (StatusCode, String)> {
+    let height = state.storage.get_chain_height()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .unwrap_or(0);
+
+    let best_block = state.storage.get_best_block()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .map(|h| h.to_string())
+        .unwrap_or_else(|| "none".to_string());
+
+    let peer_count = state.p2p_manager.peer_count();
+    let uptime_seconds = state.start_time.elapsed().as_secs();
+
+    // A node is considered synced when it has no peers (standalone) or its
+    // height is at or above the maximum height reported by connected peers.
+    let max_peer_height = state.p2p_manager.max_peer_height();
+    let synced = peer_count == 0 || height >= max_peer_height;
+
+    Ok(Json(StatusResponse {
+        network: "sumatera".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        chain_id: 1,
+        height,
+        best_block,
+        peer_count,
+        uptime_seconds,
+        synced,
+    }))
 }
 
 #[derive(Serialize)]
@@ -89,24 +137,6 @@ pub struct TransactionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub block_hash: Option<String>,
     pub transaction: TransactionEnvelope,
-}
-
-async fn get_status(
-    State(state): State<AppState>,
-) -> Result<Json<StatusResponse>, (StatusCode, String)> {
-    match state.storage.get_chain_height() {
-        Ok(maybe_height) => {
-            let height = maybe_height.unwrap_or(0);
-            Ok(Json(StatusResponse {
-                network: "sumatera".to_string(),
-                height,
-            }))
-        }
-        Err(e) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Database error: {:?}", e),
-        )),
-    }
 }
 
 #[derive(Serialize)]
@@ -851,6 +881,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/snapshot", post(post_snapshot))
         .layer(axum::middleware::from_fn(cors_middleware))
         .layer(axum::middleware::from_fn_with_state(state.clone(), track_rpc_requests))
+        // TraceLayer logs every request: method, path, status code, and latency.
+        // Requires RUST_LOG=tower_http=debug (or =info for production).
+        .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
 

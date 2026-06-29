@@ -59,9 +59,11 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install minimal runtime dependencies
+# curl is required for the Docker healthcheck (CMD curl -sf http://localhost:8080/health)
 RUN apt-get update && apt-get install -y \
     libssl-dev \
     ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up working directory
