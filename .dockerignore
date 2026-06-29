@@ -1,0 +1,40 @@
+# Ignore git repositories and CI files
+.git
+.github
+
+# Ignore cargo target/ builds
+target/
+**/target/
+
+# Ignore node/npm dependencies and build assets
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.svelte-kit/
+.next/
+.nuxt/
+
+# Ignore workspace and state data
+data/
+data_sumatera/
+postgres-data/
+*.db
+*.log
+*.sqlite
+
+# Ignore editor-specific and system files
+.vscode/
+.idea/
+.env
+.env.local
+.DS_Store
+Thumbs.db
+.agents/
+
+# Ignore local packages and artifacts
+**/*.tar.gz
+**/*.zip
+**/*.tar
+**/*.tmp
+tmp/
