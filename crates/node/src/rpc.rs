@@ -150,6 +150,60 @@ async fn get_health() -> Json<HealthResponse> {
     })
 }
 
+#[derive(Serialize)]
+pub struct LiveResponse {
+    pub status: String,
+}
+
+async fn get_live() -> Json<LiveResponse> {
+    Json(LiveResponse {
+        status: "alive".to_string(),
+    })
+}
+
+#[derive(Serialize)]
+pub struct ReadyResponse {
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+async fn get_ready(
+    State(state): State<AppState>,
+) -> Result<Json<ReadyResponse>, (StatusCode, Json<ReadyResponse>)> {
+    // 1. Check if RocksDB is open and readable
+    let height = match state.storage.get_chain_height() {
+        Ok(h) => h,
+        Err(e) => {
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ReadyResponse {
+                    status: "not ready".to_string(),
+                    reason: Some(format!("Database is unhealthy: {:?}", e)),
+                }),
+            ));
+        }
+    };
+
+    // 2. Check if Genesis block is loaded
+    if height.is_none() {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ReadyResponse {
+                status: "not ready".to_string(),
+                reason: Some("Genesis block is not initialized".to_string()),
+            }),
+        ));
+    }
+
+    // P2P is guaranteed to be running if AppState exists, as we don't start the RPC task until super::network_loop::start_p2p has returned.
+    Ok(Json(ReadyResponse {
+        status: "ready".to_string(),
+        reason: None,
+    }))
+}
+
+
 async fn post_tx(
     State(state): State<AppState>,
     Json(tx): Json<TransactionEnvelope>,
@@ -847,6 +901,8 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/status", get(get_status))
         .route("/health", get(get_health))
+        .route("/live", get(get_live))
+        .route("/ready", get(get_ready))
         .route("/tx", post(post_tx))
         .route("/tx/:hash", get(get_transaction_by_hash))
         .route("/tx/pending", get(get_pending_transactions))
@@ -881,11 +937,14 @@ pub fn build_router(state: AppState) -> Router {
         .route("/snapshot", post(post_snapshot))
         .layer(axum::middleware::from_fn(cors_middleware))
         .layer(axum::middleware::from_fn_with_state(state.clone(), track_rpc_requests))
+        // CatchPanicLayer catches panics in route handlers and returns a 500 error.
+        .layer(tower_http::catch_panic::CatchPanicLayer::new())
         // TraceLayer logs every request: method, path, status code, and latency.
         // Requires RUST_LOG=tower_http=debug (or =info for production).
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
+
 
 pub async fn cors_middleware(request: axum::extract::Request, next: axum::middleware::Next) -> axum::response::Response {
     let method = request.method().clone();
