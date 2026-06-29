@@ -5,8 +5,7 @@ services:
   dev:
     build:
       context: .
-      dockerfile: docker/node/Dockerfile
-      target: dev
+      dockerfile: docker/ode/Dockerfile
     image: ghcr.io/aruna-network/dev:local
     container_name: aruna-dev
     volumes:
@@ -132,8 +131,7 @@ services:
   test:
     build:
       context: .
-      dockerfile: docker/node/Dockerfile
-      target: dev
+      dockerfile: docker/ode/Dockerfile
     image: ghcr.io/aruna-network/dev:local
     container_name: aruna-test
     volumes:

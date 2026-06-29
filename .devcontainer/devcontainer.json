@@ -1,8 +1,7 @@
 {
     "name": "ARUNA Network ODE",
     "build": {
-        "dockerfile": "../docker/node/Dockerfile",
-        "target": "dev",
+        "dockerfile": "../docker/ode/Dockerfile",
         "context": ".."
     },
     "postCreateCommand": "bash .devcontainer/postCreateCommand.sh",

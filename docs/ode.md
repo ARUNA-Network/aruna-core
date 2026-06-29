@@ -1,7 +1,7 @@
 # Official Development Environment (ODE)
 
-> **Authority**: This document is the single source of truth for ARUNA Network's build environment.  
-> **Enforcement**: All contributors, CI pipelines, and production deployments MUST match this specification.  
+> **Authority**: This document is the single source of truth for ARUNA Network's build environment.
+> **Policy**: See [docs/development/official-development-environment.md](development/official-development-environment.md) for the full enforcement policy.
 > **ADR Reference**: ADR-0001 — Official Development Environment
 
 ---
@@ -56,10 +56,10 @@ In Dev Container and Docker environments, these are set automatically via `remot
 | GitHub Actions (Ubuntu 24.04) | ✅ **Official** | Primary CI — all PRs must pass |
 | GitHub Codespaces | ✅ **Official** | Via `.devcontainer/` |
 | VS Code Dev Container | ✅ **Official** | Via `.devcontainer/` |
-| Docker Dev Image (`ghcr.io/aruna-network/dev`) | ✅ **Official** | Auto-published on `main` push |
+| Docker ODE Image (`ghcr.io/aruna-network/ode`) | ✅ **Official** | Auto-published on `main` push, validated before tagging |
 | Ubuntu Server 24.04 LTS (VPS/Bare-metal) | ✅ **Official** | Via `scripts/install.sh` |
-| Arch Linux | ⚡ Best Effort | GCC/LLVM versions may differ |
-| Fedora | ⚡ Best Effort | GCC/LLVM versions may differ |
+| Arch Linux | ⚡ Best Effort | GCC/LLVM versions may differ — bugs not prioritized |
+| Fedora | ⚡ Best Effort | GCC/LLVM versions may differ — bugs not prioritized |
 | macOS (ARM or Intel) | 🔮 Future | Blocked by RocksDB compatibility |
 | Windows Native | 🔮 Future | No ETA |
 
@@ -77,14 +77,25 @@ In Dev Container and Docker environments, these are set automatically via `remot
 
 ## Phase Roadmap
 
+## GHCR Image Catalog
+
+| Image | Purpose |
+|---|---|
+| `ghcr.io/aruna-network/ode:latest` | Full ODE toolchain — Rust, GCC, Clang, LLVM, CMake |
+| `ghcr.io/aruna-network/node-builder:latest` | ODE + compiled `aruna-node` binary |
+| `ghcr.io/aruna-network/node-runtime:latest` | Minimal production image — binary + config only |
+
+---
+
+## Phase Roadmap
+
 ### Phase 1 — Official Development Environment ✅ Complete
-- [x] `.devcontainer/Dockerfile` — Full toolchain container
-- [x] `.devcontainer/devcontainer.json` — VS Code / Codespaces config
+- [x] `docker/ode/Dockerfile` — Standalone ODE image (single source of truth for toolchain)
+- [x] `docker/node/Dockerfile` — Node images (`node-builder` + `node-runtime` targets)
+- [x] `.devcontainer/devcontainer.json` — VS Code / Codespaces config → `docker/ode/Dockerfile`
 - [x] `.devcontainer/postCreateCommand.sh` — Auto-setup on container creation
 - [x] `.devcontainer/features.json` — Machine-readable toolchain specification
 - [x] `rust-toolchain.toml` — Toolchain pinned to `1.96.0`
-- [x] `Dockerfile.dev` — Standalone dev image
-- [x] `Dockerfile.node` — Multi-stage minimal runtime image
 - [x] `docker-compose.yml` — One-command node bootstrap
 - [x] `infrastructure/systemd/aruna-node.service` — Systemd service
 - [x] `scripts/install.sh` — Bare-metal installer
@@ -93,17 +104,17 @@ In Dev Container and Docker environments, these are set automatically via `remot
 ### Phase 2 — Continuous Integration ✅ Complete
 - [x] `.github/workflows/ci.yml` — Full test suite on every PR (Ubuntu 24.04)
 - [x] `.github/workflows/bench.yml` — Nightly performance benchmarks
-- [x] `.github/workflows/docker-publish.yml` — Auto-publish dev image to GHCR
+- [x] `.github/workflows/docker-ode.yml` — Build + validate ODE image → publish to GHCR
+- [x] `.github/workflows/docker-node.yml` — Build `node-builder` + `node-runtime` → smoke test → publish
 
 ### Phase 3 — Continuous Development (In Progress)
-- [ ] Publish `ghcr.io/aruna-network/dev:latest` to GHCR
+- [ ] Publish `ghcr.io/aruna-network/ode:latest` to GHCR
 - [ ] Verify Codespaces end-to-end setup works
 - [ ] Add `CONTRIBUTING.md` with new-developer onboarding guide
 - [ ] Add `EditorConfig` for universal code style enforcement
 
 ### Phase 4 — Production Deployment
-- [ ] Publish `ghcr.io/aruna-network/node:latest` runtime image
-- [ ] Add multi-arch build matrix (`amd64` + `arm64`) in CI
+- [ ] Publish `ghcr.io/aruna-network/node-runtime:latest` — multi-arch (amd64 + arm64)
 - [ ] Add automated release pipeline with semantic versioning
 - [ ] Publish ARM64-optimized binaries as GitHub Releases assets
 
@@ -120,26 +131,26 @@ git clone https://github.com/ARUNA-Network/aruna-core.git
 ```
 
 The container will automatically:
-1. Build the ODE image from `.devcontainer/Dockerfile`
+1. Build the ODE image from `docker/ode/Dockerfile`
 2. Run `.devcontainer/postCreateCommand.sh` to verify tools and prefetch dependencies
 3. Forward ports `9000` (P2P) and `8080` (RPC)
 4. Set all required environment variables
 
-### Option B: Docker Dev Image
+### Option B: Pull the Pre-Built ODE Image
 
 ```bash
-docker pull ghcr.io/aruna-network/dev:latest
+docker pull ghcr.io/aruna-network/ode:latest
 
 docker run -it --rm \
   -v $(pwd):/workspace \
   -w /workspace \
-  ghcr.io/aruna-network/dev:latest \
+  ghcr.io/aruna-network/ode:latest \
   bash
 ```
 
 Then inside the container:
 ```bash
-CXXFLAGS="-include cstdint" cargo build --release -p aruna-node
+cargo build --release -p aruna-node
 ```
 
 ### Option C: Docker Compose (Node)
