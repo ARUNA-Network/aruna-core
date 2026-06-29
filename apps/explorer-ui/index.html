@@ -1,17 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ARUNA Explorer — Sumatera Testnet</title>
   <meta name="description" content="ARUNA Network Block Explorer. Browse blocks, transactions, and accounts on the Sumatera Testnet." />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- ── Navigation ── -->
+
+  <!-- ── Header ── -->
   <nav class="navbar" role="navigation" aria-label="Main navigation">
     <div class="nav-inner">
       <a href="index.html" class="nav-logo" aria-label="ARUNA Explorer Home">
@@ -22,96 +23,147 @@
         </div>
       </a>
       <div class="nav-badge">Sumatera Testnet</div>
-      <form class="nav-search" id="nav-search-form" role="search" aria-label="Search blockchain">
-        <input
-          id="nav-search-input"
-          type="search"
-          placeholder="Search block, tx, or address…"
-          autocomplete="off"
-          aria-label="Search"
-        />
-        <button type="submit" id="nav-search-btn" aria-label="Submit search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        </button>
-      </form>
+      
+      <ul class="nav-menu" role="menubar">
+        <li role="none"><a href="index.html" class="nav-link active" role="menuitem">Home</a></li>
+        <li role="none"><a href="block.html" class="nav-link" role="menuitem">Block</a></li>
+        <li role="none"><a href="tx.html" class="nav-link" role="menuitem">Transaction</a></li>
+        <li role="none"><a href="address.html" class="nav-link" role="menuitem">Address</a></li>
+        <li role="none"><a href="network.html" class="nav-link" role="menuitem">Network</a></li>
+        <li role="none"><a href="supply.html" class="nav-link" role="menuitem">Supply</a></li>
+        <li role="none"><a href="peers.html" class="nav-link" role="menuitem">Peers</a></li>
+        <li role="none"><a href="nodes.html" class="nav-link" role="menuitem">Nodes</a></li>
+      </ul>
     </div>
   </nav>
 
-  <!-- ── Hero Stats ── -->
-  <section class="hero" aria-label="Chain statistics">
-    <div class="container">
+  <!-- ── Search (Hero) ── -->
+  <section class="hero" aria-label="Search blockchain">
+    <div class="container hero-inner">
       <div class="hero-title">
         <h1>ARUNA Block Explorer</h1>
-        <p class="hero-sub">Community Blockchain · Mine Anywhere · Owned By Everyone</p>
+        <p class="hero-sub"> Dari Rakyat. Oleh Rakyat. Untuk Rakyat. · Mine Anywhere. Owned By Everyone.</p>
       </div>
-      <div class="stats-grid" id="stats-grid" role="region" aria-live="polite" aria-label="Live chain stats">
+      <form class="hero-search" id="hero-search-form" role="search" aria-label="Search blocks, transactions, addresses">
+        <input
+          id="hero-search-input"
+          type="search"
+          placeholder="Search by block height, transaction hash, or account address..."
+          autocomplete="off"
+          required
+          aria-required="true"
+        />
+        <button type="submit" id="hero-search-btn" aria-label="Search">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <span>Search</span>
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Main Grid Content -->
+  <main class="container">
+    <div class="dashboard-grid">
+      <!-- ── Latest Block ── -->
+      <section class="panel" id="latest-block-panel" aria-label="Latest Block Details">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <span class="panel-icon">📦</span> Latest Block
+          </h2>
+        </div>
+        <div class="panel-body" id="latest-block-card">
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+        </div>
+      </section>
+
+      <!-- ── Latest Transactions ── -->
+      <section class="panel" id="latest-txs-panel" aria-label="Latest Transactions">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <span class="panel-icon">⚡</span> Latest Transactions
+          </h2>
+        </div>
+        <div class="panel-body" id="latest-txs-list">
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── Network Status ── -->
+    <section class="panel spacing-top" id="network-status-panel" aria-label="Network Status">
+      <div class="panel-header">
+        <h2 class="panel-title">
+          <span class="panel-icon">🌐</span> Network Status
+        </h2>
+      </div>
+      <div class="stats-grid" id="stats-grid" role="region" aria-live="polite">
         <div class="stat-card" id="stat-height">
           <div class="stat-icon">📦</div>
-          <div class="stat-value skeleton" aria-label="Block height">—</div>
+          <div class="stat-value skeleton">—</div>
           <div class="stat-label">Block Height</div>
         </div>
         <div class="stat-card" id="stat-txs">
           <div class="stat-icon">⚡</div>
-          <div class="stat-value skeleton" aria-label="Total transactions">—</div>
+          <div class="stat-value skeleton">—</div>
           <div class="stat-label">Total Transactions</div>
         </div>
         <div class="stat-card" id="stat-time">
           <div class="stat-icon">⏱</div>
-          <div class="stat-value skeleton" aria-label="Last block time">—</div>
-          <div class="stat-label">Last Block</div>
+          <div class="stat-value skeleton">—</div>
+          <div class="stat-label">Last Block Time</div>
         </div>
-        <div class="stat-card" id="stat-best">
-          <div class="stat-icon">🔗</div>
-          <div class="stat-value mono skeleton" aria-label="Best block hash">—</div>
-          <div class="stat-label">Best Hash</div>
+        <div class="stat-card" id="stat-peers">
+          <div class="stat-icon">👥</div>
+          <div class="stat-value skeleton">—</div>
+          <div class="stat-label">Connected Peers</div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- ── Recent Blocks & Transactions ── -->
-  <main class="container main-grid" id="main-content">
-    <!-- Blocks -->
-    <section class="panel" id="recent-blocks-panel" aria-label="Recent blocks">
-      <div class="panel-header">
-        <h2 class="panel-title">
-          <span class="panel-icon">📦</span> Recent Blocks
-        </h2>
-        <span class="panel-live-dot" aria-label="Live updates"></span>
-      </div>
-      <div class="panel-body" id="blocks-list" role="list" aria-label="Block list" aria-live="polite">
-        <div class="skeleton-row"></div>
-        <div class="skeleton-row"></div>
-        <div class="skeleton-row"></div>
-        <div class="skeleton-row"></div>
-        <div class="skeleton-row"></div>
-      </div>
-      <a href="#" class="panel-footer-link" id="view-all-blocks" aria-label="View all blocks">View all blocks →</a>
     </section>
 
-    <!-- Transactions -->
-    <section class="panel" id="recent-txs-panel" aria-label="Recent transactions">
+    <!-- ── Charts ── -->
+    <section class="panel spacing-top" id="charts-panel" aria-label="Mining Statistics Charts">
       <div class="panel-header">
         <h2 class="panel-title">
-          <span class="panel-icon">⚡</span> Recent Transactions
+          <span class="panel-icon">📈</span> Difficulty & Transaction History
         </h2>
-        <span class="panel-live-dot" aria-label="Live updates"></span>
       </div>
-      <div class="panel-body" id="txs-list" role="list" aria-label="Transaction list" aria-live="polite">
-        <div class="skeleton-row"></div>
-        <div class="skeleton-row"></div>
-        <div class="skeleton-row"></div>
-        <div class="skeleton-row"></div>
-        <div class="skeleton-row"></div>
+      <div class="charts-container">
+        <!-- SVG Interactive Chart -->
+        <div class="chart-box">
+          <div class="chart-header">Block Difficulty Trend</div>
+          <svg id="difficulty-chart" viewBox="0 0 600 200" class="svg-chart" aria-label="Line chart showing difficulty over recent blocks">
+            <!-- Background grids -->
+            <line x1="50" y1="20" x2="550" y2="20" stroke="rgba(220,220,220,0.06)" stroke-width="1" />
+            <line x1="50" y1="70" x2="550" y2="70" stroke="rgba(220,220,220,0.06)" stroke-width="1" />
+            <line x1="50" y1="120" x2="550" y2="120" stroke="rgba(220,220,220,0.06)" stroke-width="1" />
+            <line x1="50" y1="170" x2="550" y2="170" stroke="rgba(220,220,220,0.06)" stroke-width="1" />
+            <!-- Axis lines -->
+            <line x1="50" y1="170" x2="550" y2="170" stroke="rgba(220,220,220,0.2)" stroke-width="1.5" />
+            <line x1="50" y1="20" x2="50" y2="170" stroke="rgba(220,220,220,0.2)" stroke-width="1.5" />
+            <!-- Dynamic path inserts here -->
+            <path id="chart-path" d="" fill="none" stroke="url(#gradient-difficulty)" stroke-width="3" />
+            <!-- Gradients -->
+            <defs>
+              <linearGradient id="gradient-difficulty" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="var(--brand-primary)" />
+                <stop offset="100%" stop-color="var(--brand-secondary)" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
       </div>
-      <a href="#" class="panel-footer-link" id="view-all-txs" aria-label="View all transactions">View all transactions →</a>
     </section>
   </main>
 
   <!-- ── Footer ── -->
   <footer class="footer" role="contentinfo">
     <div class="container footer-inner">
-      <span>© 2025 ARUNA Network — <em>Dari Rakyat. Oleh Rakyat. Untuk Rakyat.</em></span>
+      <span>© 2026 ARUNA Network — <em>Dari Rakyat. Oleh Rakyat. Untuk Rakyat.</em></span>
       <span class="footer-links">
         <a href="https://github.com/ARUNA-Network/aruna-core" target="_blank" rel="noopener">GitHub</a>
       </span>
@@ -120,7 +172,6 @@
 
   <script src="app.js"></script>
   <script>
-    // Dashboard-specific initialization
     document.addEventListener('DOMContentLoaded', () => {
       ARUNA.initDashboard();
     });

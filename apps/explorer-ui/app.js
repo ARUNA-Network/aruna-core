@@ -11,7 +11,8 @@ const ARUNA = (() => {
   'use strict';
 
   // ── Configuration ────────────────────────────────────────────────────────────
-  const API_BASE = (window.ARUNA_API_URL || 'http://127.0.0.1:3000') + '/api/v1';
+  // Connect to the new TypeScript Worker API running on Cloudflare Edge by default
+  const API_BASE = (window.ARUNA_API_URL || 'http://127.0.0.1:8787') + '/api/v1';
   const REFRESH_INTERVAL_MS = 12000;  // 12 seconds — slightly faster than block time
   const MICRO_ARU = 1_000_000;
 
@@ -29,6 +30,7 @@ const ARUNA = (() => {
 
   const api = {
     stats:          ()          => apiFetch('/stats'),
+    status:         ()          => apiFetch('/status'),
     blocks:         (l, o)     => apiFetch(`/blocks?limit=${l}&offset=${o}`),
     blockLatest:    ()          => apiFetch('/block/latest'),
     blockByHeight:  (n)         => apiFetch(`/block/height/${n}`),
@@ -36,6 +38,8 @@ const ARUNA = (() => {
     transaction:    (hash)      => apiFetch(`/transaction/${hash}`),
     address:        (addr, l, o) => apiFetch(`/address/${addr}?limit=${l}&offset=${o}`),
     search:         (q)         => apiFetch(`/search?q=${encodeURIComponent(q)}`),
+    peers:          ()          => apiFetch('/peers').catch(() => ({ peers: [] })),
+    validators:     ()          => apiFetch('/validators').catch(() => ({ active_validators_count: 1 })),
   };
 
   // ── Formatters ───────────────────────────────────────────────────────────────
@@ -90,7 +94,6 @@ const ARUNA = (() => {
         }
         const first = results[0];
         if (first.kind === 'block') {
-          // Block hash → block detail
           navigate(`block.html?hash=${encodeURIComponent(first.value)}`);
         } else if (first.kind === 'transaction') {
           navigate(`tx.html?hash=${encodeURIComponent(first.value)}`);
@@ -98,7 +101,6 @@ const ARUNA = (() => {
           navigate(`address.html?addr=${encodeURIComponent(first.value)}`);
         }
       } catch (err) {
-        // If search fails, try to guess the type by format
         if (/^\d+$/.test(q)) {
           navigate(`block.html?height=${encodeURIComponent(q)}`);
         } else if (q.length === 64) {
@@ -189,60 +191,90 @@ const ARUNA = (() => {
     `;
   }
 
+  // ── SVG Chart Plotter ────────────────────────────────────────────────────────
+  function drawDifficultyChart(blocks) {
+    const svg = document.getElementById('difficulty-chart');
+    if (!svg) return;
+
+    const points = blocks.map(b => b.difficulty).reverse();
+    if (points.length < 2) return;
+
+    const min = Math.min(...points);
+    const max = Math.max(...points);
+    const range = max - min || 1;
+
+    const width = 500;
+    const height = 150;
+    const startX = 50;
+    const startY = 20;
+
+    const coords = points.map((p, i) => {
+      const x = startX + (i / (points.length - 1)) * width;
+      const y = startY + height - ((p - min) / range) * height;
+      return `${x},${y}`;
+    });
+
+    const path = document.getElementById('chart-path');
+    if (path) {
+      path.setAttribute('d', `M ${coords.join(' L ')}`);
+    }
+  }
+
   // ── Dashboard ────────────────────────────────────────────────────────────────
   async function loadDashboard() {
-    // Load stats
+    // 1. Load Stats
     try {
       const stats = await api.stats();
       setText('stat-height', numFmt(stats.height));
       setText('stat-txs', numFmt(stats.total_tx_count));
       setText('stat-time', timeAgo(stats.last_block_time));
-      const hashEl = el('stat-best');
-      if (hashEl) {
-        hashEl.querySelector('.stat-value').textContent = shortHash(stats.best_hash);
-        hashEl.querySelector('.stat-value').classList.remove('skeleton');
-      }
+      setText('stat-peers', stats.node ? numFmt(stats.node.peer_count) : '1');
     } catch (err) {
       console.warn('Stats error:', err);
     }
 
-    // Load recent blocks
+    // 2. Load Latest Block Detail Card
     try {
-      const data = await api.blocks(8, 0);
-      const blocks = data.items || data;
-      if (blocks.length === 0) {
-        setHtml('blocks-list', '<div class="empty-state">No blocks indexed yet.</div>');
-      } else {
-        setHtml('blocks-list', blocks.map(blockListItem).join(''));
-      }
-      // View-all link: deeplink to highest block
-      if (blocks.length > 0) {
-        const latest = blocks[0];
-        el('view-all-blocks').href = `block.html?height=${latest.height}`;
+      const latest = await api.blockLatest();
+      if (latest) {
+        const html = `
+          ${detailRow('Height', `#${numFmt(latest.height)}`)}
+          ${detailRowMono('Hash', latest.hash)}
+          ${detailRow('Timestamp', timestamp(latest.timestamp))}
+          ${detailRow('Difficulty', numFmt(latest.difficulty))}
+          ${detailRow('Nonce', numFmt(latest.nonce))}
+        `;
+        setHtml('latest-block-card', html);
       }
     } catch (err) {
-      showError('blocks-list', err.message);
+      showError('latest-block-card', err.message);
     }
 
-    // Load recent transactions (from latest block)
+    // 3. Load Latest Transactions List
     try {
       const latest = await api.blockLatest();
       const txs = latest.transactions || [];
       if (txs.length === 0) {
-        setHtml('txs-list', '<div class="empty-state">No transactions yet.</div>');
+        setHtml('latest-txs-list', '<div class="empty-state">No transactions in the latest block.</div>');
       } else {
-        setHtml('txs-list', txs.slice(0, 8).map(txListItem).join(''));
-        if (txs.length > 0) {
-          el('view-all-txs').href = `tx.html?hash=${encodeURIComponent(txs[0].hash)}`;
-        }
+        setHtml('latest-txs-list', txs.slice(0, 5).map(txListItem).join(''));
       }
     } catch (err) {
-      showError('txs-list', err.message);
+      showError('latest-txs-list', err.message);
+    }
+
+    // 4. Draw difficulty chart using last 10 blocks
+    try {
+      const data = await api.blocks(10, 0);
+      const blocks = data.items || data;
+      drawDifficultyChart(blocks);
+    } catch (err) {
+      console.warn('Failed to load blocks for chart:', err);
     }
   }
 
   function initDashboard() {
-    setupSearch('nav-search-form', 'nav-search-input');
+    setupSearch('hero-search-form', 'hero-search-input');
     loadDashboard();
     setInterval(loadDashboard, REFRESH_INTERVAL_MS);
   }
@@ -256,7 +288,7 @@ const ARUNA = (() => {
     try {
       if (hash) {
         block = await api.blockByHash(hash);
-      } else if (height !== null) {
+      } else if (height !== null && height !== undefined) {
         block = await api.blockByHeight(Number(height));
       } else {
         block = await api.blockLatest();
@@ -267,12 +299,10 @@ const ARUNA = (() => {
       return;
     }
 
-    // Update heading
     setText('block-height-heading', numFmt(block.height));
     setText('block-hash-heading', block.hash);
     setText('breadcrumb-id', `#${block.height}`);
 
-    // Build detail card
     const html = `
       ${detailRow('Height',       `<a href="block.html?height=${block.height - 1}">#${numFmt(block.height)}</a>`)}
       ${detailRowMono('Hash',     block.hash)}
@@ -286,11 +316,8 @@ const ARUNA = (() => {
       ${detailRow('Transactions', String(block.tx_count))}
     `;
     setHtml('block-detail-card', html);
-
-    // Transaction count badge
     setText('block-tx-count', String(block.tx_count));
 
-    // Transaction list
     const txs = block.transactions || [];
     if (txs.length === 0) {
       setHtml('block-txs-list', '<div class="empty-state">No transactions in this block.</div>');
@@ -300,7 +327,7 @@ const ARUNA = (() => {
   }
 
   function initBlockDetail() {
-    setupSearch('nav-search-form', 'nav-search-input');
+    setupSearch('hero-search-form', 'hero-search-input');
     loadBlockDetail();
   }
 
@@ -344,7 +371,7 @@ const ARUNA = (() => {
   }
 
   function initTxDetail() {
-    setupSearch('nav-search-form', 'nav-search-input');
+    setupSearch('hero-search-form', 'hero-search-input');
     loadTxDetail();
   }
 
@@ -380,8 +407,103 @@ const ARUNA = (() => {
   }
 
   function initAddressDetail() {
-    setupSearch('nav-search-form', 'nav-search-input');
+    setupSearch('hero-search-form', 'hero-search-input');
     loadAddressDetail();
+  }
+
+  // ── Network Metrics Page ───────────────────────────────────────────────────────
+  async function initNetworkPage() {
+    try {
+      const stats = await api.stats();
+      const html = `
+        ${detailRow('Network Name', stats.node ? stats.node.network : 'Sumatera')}
+        ${detailRow('Chain ID', stats.node ? String(stats.node.chain_id) : '7777')}
+        ${detailRow('Synced', stats.node && stats.node.synced ? '<span class="health-active">✓ Synced</span>' : 'Standalone')}
+        ${detailRow('Uptime', stats.node ? `${numFmt(Math.floor(stats.node.uptime_seconds / 3600))} hours` : '—')}
+        ${detailRow('Active Peers', stats.node ? numFmt(stats.node.peer_count) : '1')}
+        ${detailRow('Version', stats.node ? stats.node.version : '0.1.0')}
+        ${detailRow('Best Block Height', `#${numFmt(stats.height)}`)}
+        ${detailRowMono('Best Block Hash', stats.best_hash)}
+      `;
+      setHtml('network-metrics-detail', html);
+    } catch (err) {
+      showError('network-metrics-detail', err.message);
+    }
+  }
+
+  // ── Peers Page ───────────────────────────────────────────────────────────────
+  async function initPeersPage() {
+    try {
+      const data = await api.peers();
+      const peers = data.peers || [];
+      if (peers.length === 0) {
+        setHtml('peers-list-panel', `
+          <div class="empty-state">No active peers connected. Nodes operate in standalone genesis mode.</div>
+        `);
+      } else {
+        const rows = peers.map((p, i) => `
+          <tr>
+            <td class="mono">#${i + 1}</td>
+            <td class="mono">${escHtml(p)}</td>
+            <td>Full Node</td>
+            <td><span class="health-active">Active</span></td>
+          </tr>
+        `).join('');
+
+        setHtml('peers-list-panel', `
+          <table class="grid-table">
+            <thead>
+              <tr>
+                <th>Index</th>
+                <th>Peer Address (P2P)</th>
+                <th>Capabilities</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        `);
+      }
+    } catch (err) {
+      showError('peers-list-panel', err.message);
+    }
+  }
+
+  // ── Nodes/Validators Page ─────────────────────────────────────────────────────
+  async function initNodesPage() {
+    try {
+      const data = await api.validators();
+      const count = data.active_validators_count || 1;
+      
+      const rows = `
+        <tr>
+          <td class="mono">#1 (Local Node)</td>
+          <td class="mono">${escHtml(data.reward_address || 'sum1faucetaddressxxxxxxxxxxxxxxxxxxxxxxxxxx')}</td>
+          <td>10,000 ARU (Min Stake)</td>
+          <td><span class="health-active">Active Validator</span></td>
+        </tr>
+      `;
+
+      setHtml('nodes-list-panel', `
+        <table class="grid-table">
+          <thead>
+            <tr>
+              <th>Validator</th>
+              <th>Reward Address</th>
+              <th>Stake Weight</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      `);
+    } catch (err) {
+      showError('nodes-list-panel', err.message);
+    }
   }
 
   // ── Public API ───────────────────────────────────────────────────────────────
@@ -390,5 +512,8 @@ const ARUNA = (() => {
     initBlockDetail,
     initTxDetail,
     initAddressDetail,
+    initNetworkPage,
+    initPeersPage,
+    initNodesPage,
   };
 })();

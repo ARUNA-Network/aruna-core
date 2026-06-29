@@ -20,3 +20,8 @@ tunnel.env
 deployment/monitoring/grafana/grafana.ini
 
 
+
+# Node.js
+node_modules/
+.wrangler/
+dist/

@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Block Detail — ARUNA Explorer</title>
-  <meta name="description" content="ARUNA Network block details including transactions, header, and metadata." />
+  <title>ARUNA Explorer — Network Metrics</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -26,10 +25,10 @@
       
       <ul class="nav-menu" role="menubar">
         <li role="none"><a href="index.html" class="nav-link" role="menuitem">Home</a></li>
-        <li role="none"><a href="block.html" class="nav-link active" role="menuitem">Block</a></li>
+        <li role="none"><a href="block.html" class="nav-link" role="menuitem">Block</a></li>
         <li role="none"><a href="tx.html" class="nav-link" role="menuitem">Transaction</a></li>
         <li role="none"><a href="address.html" class="nav-link" role="menuitem">Address</a></li>
-        <li role="none"><a href="network.html" class="nav-link" role="menuitem">Network</a></li>
+        <li role="none"><a href="network.html" class="nav-link active" role="menuitem">Network</a></li>
         <li role="none"><a href="supply.html" class="nav-link" role="menuitem">Supply</a></li>
         <li role="none"><a href="peers.html" class="nav-link" role="menuitem">Peers</a></li>
         <li role="none"><a href="nodes.html" class="nav-link" role="menuitem">Nodes</a></li>
@@ -37,36 +36,42 @@
     </div>
   </nav>
 
-  <main class="container page-detail" id="main-content">
-    <div class="breadcrumb" aria-label="Breadcrumb">
-      <a href="index.html">Home</a>
-      <span class="breadcrumb-sep">›</span>
-      <span>Block</span>
-      <span class="breadcrumb-sep">›</span>
-      <span id="breadcrumb-id" class="mono">—</span>
-    </div>
-
-    <div class="detail-header">
-      <div class="detail-icon-wrap">
-        <span class="detail-icon">📦</span>
+  <main class="container page-spacing">
+    <section class="panel">
+      <div class="panel-header">
+        <h1 class="panel-title"><span class="panel-icon">🌐</span> Network Statistics</h1>
       </div>
-      <div>
-        <h1 class="detail-title" id="block-title">Block <span id="block-height-heading">—</span></h1>
-        <div class="detail-hash mono" id="block-hash-heading">—</div>
+      <div class="panel-body">
+        <div class="detail-container" id="network-metrics-detail">
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+        </div>
       </div>
-    </div>
-
-    <section class="detail-card" aria-label="Block header fields" id="block-detail-card">
-      <div class="skeleton-block"></div>
     </section>
 
-    <section class="panel mt-lg" id="block-txs-panel" aria-label="Transactions in block">
+    <!-- Network Health Summary -->
+    <section class="panel spacing-top">
       <div class="panel-header">
-        <h2 class="panel-title"><span class="panel-icon">⚡</span> Transactions <span class="badge" id="block-tx-count">—</span></h2>
+        <h2 class="panel-title"><span class="panel-icon">📊</span> Parameter Configurations</h2>
       </div>
-      <div class="panel-body" id="block-txs-list" role="list" aria-live="polite">
-        <div class="skeleton-row"></div>
-        <div class="skeleton-row"></div>
+      <div class="panel-body">
+        <div class="detail-row">
+          <span class="detail-label">Consensus Model</span>
+          <span class="detail-value">Hybrid Work Weight (PoW + Stake weight PoS)</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Block Time Target</span>
+          <span class="detail-value">30 Seconds</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Soft Finality</span>
+          <span class="detail-value">4 blocks (~2 minutes)</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Difficulty Algorithm</span>
+          <span class="detail-value">Weighted Moving Average (WMA) every block</span>
+        </div>
       </div>
     </section>
   </main>
@@ -74,14 +79,16 @@
   <footer class="footer" role="contentinfo">
     <div class="container footer-inner">
       <span>© 2026 ARUNA Network — <em>Dari Rakyat. Oleh Rakyat. Untuk Rakyat.</em></span>
-      <span class="footer-links"><a href="https://github.com/ARUNA-Network/aruna-core" target="_blank" rel="noopener">GitHub</a></span>
+      <span class="footer-links">
+        <a href="https://github.com/ARUNA-Network/aruna-core" target="_blank" rel="noopener">GitHub</a>
+      </span>
     </div>
   </footer>
 
   <script src="app.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      ARUNA.initBlockDetail();
+      ARUNA.initNetworkPage();
     });
   </script>
 </body>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARUNA Explorer — Token Supply</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <nav class="navbar" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo" aria-label="ARUNA Explorer Home">
+        <div class="logo-icon">⬡</div>
+        <div class="logo-text">
+          <span class="logo-name">ARUNA</span>
+          <span class="logo-sub">Explorer</span>
+        </div>
+      </a>
+      <div class="nav-badge">Sumatera Testnet</div>
+      
+      <ul class="nav-menu" role="menubar">
+        <li role="none"><a href="index.html" class="nav-link" role="menuitem">Home</a></li>
+        <li role="none"><a href="block.html" class="nav-link" role="menuitem">Block</a></li>
+        <li role="none"><a href="tx.html" class="nav-link" role="menuitem">Transaction</a></li>
+        <li role="none"><a href="address.html" class="nav-link" role="menuitem">Address</a></li>
+        <li role="none"><a href="network.html" class="nav-link" role="menuitem">Network</a></li>
+        <li role="none"><a href="supply.html" class="nav-link active" role="menuitem">Supply</a></li>
+        <li role="none"><a href="peers.html" class="nav-link" role="menuitem">Peers</a></li>
+        <li role="none"><a href="nodes.html" class="nav-link" role="menuitem">Nodes</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container page-spacing">
+    <section class="panel">
+      <div class="panel-header">
+        <h1 class="panel-title"><span class="panel-icon">💰</span> Circulating Supply</h1>
+      </div>
+      <div class="panel-body">
+        <div class="detail-container">
+          <div class="detail-row">
+            <span class="detail-label">Max Token Cap Limit</span>
+            <span class="detail-value text-glow">1,000,000,000 ARU</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Current Block Reward</span>
+            <span class="detail-value">25 ARU (Era 1: Years 0–4)</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Halving Interval Era</span>
+            <span class="detail-value">Every 4 Years (4,204,800 blocks)</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Genesis Premine Allocation</span>
+            <span class="detail-value">1.5% (15,000,000 ARU for rewards/liquidity experiments)</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Founder Allocations Vesting</span>
+            <span class="detail-value">1.5% (Vesting: 48 Months Linear, monthly lock)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Token Economics Allocations -->
+    <section class="panel spacing-top">
+      <div class="panel-header">
+        <h2 class="panel-title"><span class="panel-icon">📊</span> Block Reward Distribution Model</h2>
+      </div>
+      <div class="panel-body">
+        <div class="detail-row">
+          <span class="detail-label">Proof of Work (PoW / Miners)</span>
+          <span class="detail-value">70% (17.5 ARU)</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Proof of Stake (PoS / Validators)</span>
+          <span class="detail-value">25% (6.25 ARU)</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Network Treasury Allocation</span>
+          <span class="detail-value">5% (1.25 ARU under governance contracts control)</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer" role="contentinfo">
+    <div class="container footer-inner">
+      <span>© 2026 ARUNA Network — <em>Dari Rakyat. Oleh Rakyat. Untuk Rakyat.</em></span>
+      <span class="footer-links">
+        <a href="https://github.com/ARUNA-Network/aruna-core" target="_blank" rel="noopener">GitHub</a>
+      </span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

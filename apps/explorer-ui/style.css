@@ -722,3 +722,124 @@ a:hover { color: var(--brand-secondary); }
   .container { padding-inline: var(--sp-md); }
   .stat-value { font-size: 20px; }
 }
+
+/* ── Appending Platform Additions ── */
+
+.nav-menu {
+  display: flex;
+  list-style: none;
+  gap: var(--sp-md);
+  margin-left: var(--sp-lg);
+  padding: 0;
+}
+
+.nav-menu a {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: color var(--t-fast);
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+}
+
+.nav-menu a:hover,
+.nav-menu a.active {
+  color: var(--brand-primary);
+  background: hsla(258, 85%, 65%, 0.1);
+}
+
+@media (max-width: 960px) {
+  .nav-menu {
+    display: none; /* Hide on smaller screens or replace with dropdown */
+  }
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-lg);
+  margin-top: var(--sp-lg);
+}
+
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.spacing-top {
+  margin-top: var(--sp-lg);
+}
+
+.page-spacing {
+  padding-top: var(--sp-lg);
+  padding-bottom: var(--sp-xl);
+}
+
+/* Charts styles */
+.charts-container {
+  padding: var(--sp-lg);
+  background: var(--bg-elevated);
+  border-radius: var(--r-md);
+}
+
+.chart-box {
+  width: 100%;
+}
+
+.chart-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--sp-md);
+}
+
+.svg-chart {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* Text glow */
+.text-glow {
+  text-shadow: 0 0 10px var(--brand-glow);
+  color: var(--brand-accent) !important;
+}
+
+/* Peer and Node Lists */
+.grid-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.grid-table th {
+  padding: var(--sp-md) var(--sp-lg);
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.grid-table td {
+  padding: var(--sp-md) var(--sp-lg);
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.grid-table tr:hover td {
+  background: var(--bg-hover);
+}
+
+.health-active {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.health-offline {
+  color: var(--error);
+  font-weight: 600;
+}
+
