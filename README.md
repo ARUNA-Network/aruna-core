@@ -110,7 +110,7 @@ CXXFLAGS="-include cstdint" cargo build --release -p aruna-node
 
 ### Run Node in Daemon Mode
 ```bash
-CXXFLAGS="-include cstdint" cargo run --release -p aruna-node -- daemon --p2p-port 9000 --rpc-port 8080
+CXXFLAGS="-include cstdint" cargo run --release -p aruna-node -- --p2p-port 9000 --rpc-port 8080
 ```
 
 ### Run Tests
@@ -201,7 +201,7 @@ Open the project in VS Code and select **"Reopen in Container"**, or open direct
 
 Then build and run the node locally:
 ```bash
-CXXFLAGS="-include cstdint" cargo run --release -p aruna-node -- daemon --p2p-port 9000 --rpc-port 8080
+CXXFLAGS="-include cstdint" cargo run --release -p aruna-node -- --p2p-port 9000 --rpc-port 8080
 ```
 
 ---

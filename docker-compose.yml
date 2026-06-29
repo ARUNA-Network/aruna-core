@@ -43,7 +43,7 @@ services:
       - ./data:/app/data_sumatera
     environment:
       - RUST_LOG=info
-    command: ["daemon", "--p2p-port", "9000", "--rpc-port", "8080"]
+    command: ["--p2p-port", "9000", "--rpc-port", "8080"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/status"]
       interval: 30s

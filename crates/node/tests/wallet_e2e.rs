@@ -219,20 +219,18 @@ async fn test_wallet_end_to_end_flow() {
     assert_eq!(tx_lookup["status"], "committed");
     assert_eq!(tx_lookup["block_height"].as_u64().unwrap(), 1);
 
-    // 8. Observability Check: Verify /metrics endpoint is populated and correct
+    // 8. Observability Check: Verify /metrics endpoint is populated and correct (Prometheus format)
     println!("Verifying /metrics endpoint...");
     let metrics_body = send_rpc_request(rpc_port, "GET", "/metrics", None)
         .await
         .expect("Failed to fetch /metrics");
-    let metrics: serde_json::Value = serde_json::from_str(&metrics_body).unwrap();
     
-    assert!(metrics["mempool_capacity"].as_u64().is_some());
-    assert_eq!(metrics["mempool_size"].as_u64().unwrap(), 0); // all txs committed
-    assert_eq!(metrics["peer_count"].as_u64().unwrap(), 0); // no active peers in E2E test
-    assert!(metrics["database_size_bytes"].as_u64().unwrap() > 0);
-    assert_eq!(metrics["chain_height"].as_u64().unwrap(), 1);
-    assert_eq!(metrics["best_block_hash"].as_str().unwrap(), committed_hash.to_string());
-    assert!(metrics["uptime_seconds"].as_u64().is_some());
+    assert!(metrics_body.contains("aruna_block_height 1"), "metrics should contain aruna_block_height 1");
+    assert!(metrics_body.contains("aruna_mempool_size 0"), "metrics should contain aruna_mempool_size 0");
+    assert!(metrics_body.contains("aruna_peer_count 0"), "metrics should contain aruna_peer_count 0");
+    assert!(metrics_body.contains("aruna_block_time_seconds 30"), "metrics should contain aruna_block_time_seconds 30");
+    assert!(metrics_body.contains("aruna_fork_count 0"), "metrics should contain aruna_fork_count 0");
+    assert!(metrics_body.contains("aruna_rpc_requests_total"), "metrics should contain aruna_rpc_requests_total");
 
     // Teardown Axum RPC server
     rpc_handle.abort();

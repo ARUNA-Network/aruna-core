@@ -71,6 +71,9 @@ pub struct P2PManager {
     node_id: [u8; 32],
     peer_writers: Arc<Mutex<Vec<mpsc::UnboundedSender<P2PMessage>>>>,
     connection_handles: Arc<Mutex<Vec<tokio::task::AbortHandle>>>,
+    peer_addresses: Arc<Mutex<std::collections::HashSet<SocketAddr>>>,
+    /// Highest block height reported by connected peers during P2P handshake.
+    pub max_peer_height: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl P2PManager {
@@ -88,6 +91,8 @@ impl P2PManager {
             node_id,
             peer_writers: Arc::new(Mutex::new(Vec::new())),
             connection_handles: Arc::new(Mutex::new(Vec::new())),
+            peer_addresses: Arc::new(Mutex::new(std::collections::HashSet::new())),
+            max_peer_height: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
@@ -101,6 +106,8 @@ impl P2PManager {
 
         let mut writers = self.peer_writers.lock().unwrap();
         writers.clear();
+        let mut addrs = self.peer_addresses.lock().unwrap();
+        addrs.clear();
         println!("Forced disconnect of all peers on port {}", self.p2p_port);
     }
 
@@ -140,6 +147,17 @@ impl P2PManager {
     /// Return the count of currently connected active peers.
     pub fn peer_count(&self) -> usize {
         self.peer_writers.lock().unwrap().len()
+    }
+
+    /// Return the list of currently connected active peer addresses.
+    pub fn connected_peers(&self) -> Vec<SocketAddr> {
+        let addrs = self.peer_addresses.lock().unwrap();
+        addrs.iter().cloned().collect()
+    }
+
+    /// Return the maximum peer height reported.
+    pub fn max_peer_height(&self) -> u64 {
+        self.max_peer_height.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Starts the P2P server to listen for incoming connections.
@@ -262,9 +280,13 @@ impl P2PManager {
         {
             let mut writers = self.peer_writers.lock().unwrap();
             writers.push(tx.clone());
+            let mut addrs = self.peer_addresses.lock().unwrap();
+            addrs.insert(peer_addr);
         }
 
         // 2. Synchronization check
+        self.max_peer_height.fetch_max(peer_handshake.current_height, std::sync::atomic::Ordering::Relaxed);
+        
         // If peer height is greater than ours, initiate a SyncRequest to catch up
         if peer_handshake.current_height > our_height {
             // Start sync from a few blocks before our current height to handle potential forks/reorgs
@@ -433,6 +455,8 @@ impl P2PManager {
         {
             let mut writers = self.peer_writers.lock().unwrap();
             writers.retain(|w| !w.same_channel(&tx));
+            let mut addrs = self.peer_addresses.lock().unwrap();
+            addrs.remove(&peer_addr);
         }
 
         writer_task.abort();

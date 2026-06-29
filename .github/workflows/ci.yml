@@ -221,6 +221,10 @@ jobs:
            # Assert that Node B successfully received, validated, and added the transaction to its mempool
            grep -q "Received and added P2P transaction to mempool" node_b_tx.log
 
+      - name: Run Local Multi-Node Integration Test (A <-> B <-> C)
+        run: |
+          bash tests/multi_node_integration.sh
+
       - name: Run Protocol & Network Conformance Tests
         run: |
           CXXFLAGS="-include cstdint" cargo test -p aruna-node --test protocol_conformance

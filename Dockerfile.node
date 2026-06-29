@@ -77,4 +77,4 @@ EXPOSE 8080
 
 # Run node daemon by default
 ENTRYPOINT ["/app/aruna-node"]
-CMD ["daemon", "--p2p-port", "9000", "--rpc-port", "8080"]
+CMD ["--p2p-port", "9000", "--rpc-port", "8080"]

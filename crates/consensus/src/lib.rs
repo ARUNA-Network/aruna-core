@@ -47,6 +47,8 @@ pub struct ConsensusEngine {
     pub validator_reward_addr: Address,
     /// Address that receives the treasury allocation (5% of block reward + remaining fees).
     pub treasury_reward_addr: Address,
+    /// Thread-safe count of successful chain reorganizations.
+    pub fork_count: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl ConsensusEngine {
@@ -71,6 +73,7 @@ impl ConsensusEngine {
             miner_reward_addr,
             validator_reward_addr,
             treasury_reward_addr,
+            fork_count: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
@@ -508,6 +511,7 @@ impl ConsensusEngine {
                     let (final_hash, _, final_height) = applied_blocks.last().unwrap();
                     self.storage.put_best_block(final_hash)?;
                     self.storage.put_chain_height(*final_height)?;
+                    self.fork_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     println!("Reorganization complete! Canonical tip switched to {} at height {}", final_hash, final_height);
                 } else {
                     println!("Reorganization failed: {:?}. Restoring original chain state...", validation_err);

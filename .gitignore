@@ -4,6 +4,9 @@
 /node_startup.log
 /node_recovery.log
 /backups
+/*_integ.log
+/*_restarted.log
+/node_test.log
 
 # Cloudflare tunnel credentials — NEVER commit these
 tunnel.env

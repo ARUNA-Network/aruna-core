@@ -263,6 +263,11 @@ impl Mempool {
     pub fn get_transaction(&self, hash: &Hash) -> Option<TransactionEnvelope> {
         self.transactions.read().unwrap().get(hash).cloned()
     }
+
+    /// Returns all transactions currently waiting in the mempool.
+    pub fn get_all_transactions(&self) -> Vec<TransactionEnvelope> {
+        self.transactions.read().unwrap().values().cloned().collect()
+    }
 }
 
 #[cfg(test)]

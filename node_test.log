@@ -3,7 +3,6 @@ Initializing new ledger state from genesis config...
 
 ARUNA Node Started
 Network : Sumatera Testnet
-Height  : 0
 Genesis : Loaded
 Storage : Opened
 State   : Initialized
