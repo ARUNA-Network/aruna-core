@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "description": "ARUNA Network Block Explorer UI",
   "scripts": {
-    "build": "echo 'Static assets ready.'"
+    "build": "rm -rf dist && mkdir -p dist && cp *.html style.css app.js dist/"
   }
 }
