@@ -37,6 +37,8 @@ pub struct HandshakeMessage {
     pub current_height: u64,
     /// Capability flags (Full Node, Validator, Archive, etc.)
     pub capabilities: u8,
+    /// The P2P port the sending node is listening on.
+    pub listener_port: u16,
 }
 
 /// P2P block history synchronization request stream payload.
@@ -57,6 +59,21 @@ pub struct SyncResponseMessage {
     pub status: u8,
     /// List of serialized blocks.
     pub blocks: Vec<Block>,
+}
+
+/// P2P header synchronization request payload.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeaderSyncRequestMessage {
+    pub start_height: u64,
+    pub end_height: u64,
+    pub limit: u16,
+}
+
+/// P2P header synchronization response payload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeaderSyncResponseMessage {
+    pub status: u8,
+    pub headers: Vec<BlockHeader>,
 }
 
 #[cfg(test)]

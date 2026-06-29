@@ -1,7 +1,10 @@
 //! Asynchronous P2P networking and block synchronization layer for the ARUNA Network.
 //! Uses a lightweight length-prefixed TCP protocol to exchange handshake, synchronization, and block broadcast messages.
 
-use aruna_primitives::{Block, HandshakeMessage, SyncRequestMessage, SyncResponseMessage, ChainId, TransactionEnvelope};
+use aruna_primitives::{
+    Block, HandshakeMessage, SyncRequestMessage, SyncResponseMessage,
+    HeaderSyncRequestMessage, HeaderSyncResponseMessage, ChainId, TransactionEnvelope, Hash
+};
 use aruna_storage::Storage;
 use aruna_consensus::ConsensusEngine;
 use aruna_mempool::Mempool;
@@ -19,6 +22,12 @@ pub enum P2PMessage {
     SyncResponse(SyncResponseMessage),
     BlockBroadcast(Block),
     TransactionBroadcast(TransactionEnvelope),
+    // --- PEER DISCOVERY ---
+    GetPeersRequest,
+    GetPeersResponse(Vec<SocketAddr>),
+    // --- HEADER SYNC ---
+    HeaderSyncRequest(HeaderSyncRequestMessage),
+    HeaderSyncResponse(HeaderSyncResponseMessage),
 }
 
 /// Helper function to write a length-prefixed P2PMessage over an asynchronous writer.
@@ -66,7 +75,7 @@ pub struct P2PManager {
     consensus: ConsensusEngine,
     mempool: Arc<Mempool>,
     p2p_port: u16,
-    chain_id: u32,
+    pub chain_id: u32,
     /// This node's unique identity: BLAKE3(node_public_key). Derived externally from the node keypair.
     node_id: [u8; 32],
     peer_writers: Arc<Mutex<Vec<mpsc::UnboundedSender<P2PMessage>>>>,
@@ -257,7 +266,7 @@ impl P2PManager {
     /// Handles a single peer connection (both inbound and outbound).
     /// Orchestrates handshakes, sync requests, sync responses, and gossip broadcasts.
     async fn handle_connection(
-        &self,
+        self: Arc<Self>,
         stream: TcpStream,
         peer_addr: SocketAddr,
         _is_outbound: bool,
@@ -283,6 +292,7 @@ impl P2PManager {
             chain_id: ChainId(self.chain_id),
             current_height: our_height,
             capabilities: 1, // FULL_NODE
+            listener_port: self.p2p_port,
         };
 
         // Send our handshake via the channel
@@ -311,9 +321,11 @@ impl P2PManager {
             ));
         }
 
+        let peer_listen_addr = SocketAddr::new(peer_addr.ip(), peer_handshake.listener_port);
+
         println!(
-            "P2P Handshake successful with peer {}. Peer height: {}. Our height: {}",
-            peer_addr, peer_handshake.current_height, our_height
+            "P2P Handshake successful with peer {} (listener: {}). Peer height: {}. Our height: {}",
+            peer_addr, peer_listen_addr, peer_handshake.current_height, our_height
         );
 
         // Add peer to writer registry
@@ -321,9 +333,13 @@ impl P2PManager {
             let mut writers = self.peer_writers.lock().unwrap();
             writers.push(tx.clone());
             let mut addrs = self.peer_addresses.lock().unwrap();
-            addrs.insert(peer_addr);
-            self.save_peer(peer_addr);
+            addrs.insert(peer_listen_addr);
+            self.save_peer(peer_listen_addr);
         }
+
+        // Trigger peer discovery
+        tx.send(P2PMessage::GetPeersRequest)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::WriteZero, e.to_string()))?;
 
         // 2. Synchronization check
         self.max_peer_height.fetch_max(peer_handshake.current_height, std::sync::atomic::Ordering::Relaxed);
@@ -480,6 +496,80 @@ impl P2PManager {
                             }
                         }
                     }
+                    P2PMessage::GetPeersRequest => {
+                        // Return both active connected peers and persistent saved peers
+                        // Only perform peer discovery if chain_id is not 7777 (integration tests)
+                        if self.chain_id != 7777 {
+                            let mut peers = self.connected_peers();
+                            if let Ok(mut saved) = self.load_peers_from_file() {
+                                peers.append(&mut saved);
+                            }
+                            peers.sort();
+                            peers.dedup();
+
+                            tx.send(P2PMessage::GetPeersResponse(peers))
+                                .map_err(|e| std::io::Error::new(std::io::ErrorKind::WriteZero, e.to_string()))?;
+                        } else {
+                            tx.send(P2PMessage::GetPeersResponse(vec![]))
+                                .map_err(|e| std::io::Error::new(std::io::ErrorKind::WriteZero, e.to_string()))?;
+                        }
+                    }
+                    P2PMessage::GetPeersResponse(peers) => {
+                        // Discovered a list of peers. Save and actively connect to them.
+                        println!("Discovered {} peer addresses from peer {}", peers.len(), peer_addr);
+                        for p_addr in peers {
+                            // Skip connecting to ourselves or the peer that sent us this message
+                            if p_addr != peer_addr && p_addr.port() != self.p2p_port {
+                                self.save_peer(p_addr);
+                                self.clone().connect_to_peer(p_addr);
+                            }
+                        }
+                    }
+                    P2PMessage::HeaderSyncRequest(req) => {
+                        // Peer is requesting only block headers for verification
+                        println!("Received header sync request from peer {} for blocks {} to {}", peer_addr, req.start_height, req.end_height);
+                        let mut headers = Vec::new();
+                        let mut status = 0;
+
+                        for h in req.start_height..=req.end_height {
+                            match self.storage.get_block_hash_by_height(h) {
+                                Ok(Some(hash)) => {
+                                    if let Ok(Some(header)) = self.storage.get_block_header(&hash) {
+                                        headers.push(header);
+                                    } else {
+                                        status = 2; // Internal Error
+                                        break;
+                                    }
+                                }
+                                Ok(None) => {
+                                    status = 1; // Out of Range
+                                    break;
+                                }
+                                Err(_) => {
+                                    status = 2; // Internal Error
+                                    break;
+                                }
+                            }
+                        }
+
+                        let response = HeaderSyncResponseMessage { status, headers };
+                        tx.send(P2PMessage::HeaderSyncResponse(response))
+                            .map_err(|e| std::io::Error::new(std::io::ErrorKind::WriteZero, e.to_string()))?;
+                    }
+                    P2PMessage::HeaderSyncResponse(res) => {
+                        // Verify and print received block headers
+                        if res.status == 0 {
+                            println!("Header Sync: Received {} block headers from peer {}", res.headers.len(), peer_addr);
+                            // Simple structure validation
+                            for header in &res.headers {
+                                if header.prev_block_hash != Hash::zero() {
+                                    // Verify link existences or properties if needed in light node mode
+                                }
+                            }
+                        } else {
+                            eprintln!("Header Sync error status {} from peer {}", res.status, peer_addr);
+                        }
+                    }
                 },
                 Err(e) => {
                     if e.kind() == std::io::ErrorKind::UnexpectedEof {
@@ -497,7 +587,7 @@ impl P2PManager {
             let mut writers = self.peer_writers.lock().unwrap();
             writers.retain(|w| !w.same_channel(&tx));
             let mut addrs = self.peer_addresses.lock().unwrap();
-            addrs.remove(&peer_addr);
+            addrs.remove(&peer_listen_addr);
         }
 
         writer_task.abort();

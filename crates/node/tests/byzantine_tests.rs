@@ -276,6 +276,7 @@ async fn test_byzantine_and_invalid_messages() {
             chain_id: aruna_primitives::ChainId(7777),
             current_height: 0,
             capabilities: 1,
+            listener_port: 9400,
         });
         aruna_networking::write_msg(&mut stream, &our_handshake).await.unwrap();
 
@@ -308,6 +309,7 @@ async fn test_byzantine_and_invalid_messages() {
             chain_id: aruna_primitives::ChainId(7777),
             current_height: 0,
             capabilities: 1,
+            listener_port: 9400,
         });
         aruna_networking::write_msg(&mut stream, &our_handshake).await.unwrap();
 
