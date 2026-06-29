@@ -48,6 +48,16 @@ impl NodeRuntime {
             }
         }
 
+        // --- GRACEFUL SHUTDOWN SEQUENCE ---
+        println!("Shutting down P2P connections...");
+        self.context.p2p_manager.disconnect_all();
+
+        println!("Flushing database state to disk...");
+        if let Err(e) = self.context.storage.flush() {
+            eprintln!("Failed to flush RocksDB storage on shutdown: {:?}", e);
+        }
+
+        println!("ARUNA Node shut down cleanly.");
         Ok(())
     }
 }

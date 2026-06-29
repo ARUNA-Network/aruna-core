@@ -109,6 +109,17 @@ async fn get_status(
     }
 }
 
+#[derive(Serialize)]
+pub struct HealthResponse {
+    pub status: String,
+}
+
+async fn get_health() -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "healthy".to_string(),
+    })
+}
+
 async fn post_tx(
     State(state): State<AppState>,
     Json(tx): Json<TransactionEnvelope>,
@@ -523,6 +534,40 @@ async fn post_peer(
     Ok(StatusCode::OK)
 }
 
+#[derive(Serialize)]
+pub struct SnapshotResponse {
+    pub status: String,
+    pub path: String,
+}
+
+async fn post_snapshot(
+    State(state): State<AppState>,
+) -> Result<Json<SnapshotResponse>, (StatusCode, String)> {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let snapshot_dir = state.db_path
+        .parent()
+        .unwrap_or(&state.db_path)
+        .join("snapshots")
+        .join(format!("snapshot_{}", timestamp));
+
+    if let Some(parent) = snapshot_dir.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create snapshot parent directory: {:?}", e)))?;
+    }
+
+    state.storage.create_checkpoint(&snapshot_dir)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("RocksDB checkpoint creation failed: {:?}", e)))?;
+
+    Ok(Json(SnapshotResponse {
+        status: "success".to_string(),
+        path: snapshot_dir.to_string_lossy().into_owned(),
+    }))
+}
+
 pub async fn track_rpc_requests(
     State(state): State<AppState>,
     request: axum::extract::Request,
@@ -535,6 +580,7 @@ pub async fn track_rpc_requests(
 pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/status", get(get_status))
+        .route("/health", get(get_health))
         .route("/tx", post(post_tx))
         .route("/tx/:hash", get(get_transaction_by_hash))
         .route("/chain/tip", get(get_chain_tip))
@@ -550,6 +596,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/difficulty", get(get_difficulty))
         .route("/metrics", get(get_metrics))
         .route("/peer", post(post_peer))
+        .route("/snapshot", post(post_snapshot))
         .layer(axum::middleware::from_fn(cors_middleware))
         .layer(axum::middleware::from_fn_with_state(state.clone(), track_rpc_requests))
         .with_state(state)

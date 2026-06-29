@@ -478,6 +478,19 @@ impl Storage {
         self.db.write(batch.batch)?;
         Ok(())
     }
+
+    /// Flush all memtables of the RocksDB database to SST files on disk.
+    pub fn flush(&self) -> Result<(), StorageError> {
+        self.db.flush()?;
+        Ok(())
+    }
+
+    /// Create a consistent point-in-time snapshot/checkpoint of the database at the specified path.
+    pub fn create_checkpoint(&self, path: &Path) -> Result<(), StorageError> {
+        let checkpoint = rocksdb::checkpoint::Checkpoint::new(&self.db)?;
+        checkpoint.create_checkpoint(path)?;
+        Ok(())
+    }
 }
 
 /// Helper structure to compose atomic batch updates.

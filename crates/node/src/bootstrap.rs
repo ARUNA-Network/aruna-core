@@ -143,5 +143,45 @@ pub fn initialize_database(
         }
     }
 
+    // --- Automatic Ledger Recovery & Validation ---
+    // Validate blockchain integrity and auto-rollback to the last known valid parent block.
+    let repaired_height = storage.get_chain_height()?.unwrap_or(0);
+    let mut current_best = repaired_height;
+    while current_best > 0 {
+        let mut is_valid = false;
+        if let Some(hash) = storage.get_block_hash_by_height(current_best)? {
+            if let Some(header) = storage.get_block_header(&hash)? {
+                let parent_exists = if header.prev_block_hash == Hash::zero() {
+                    current_best == 0
+                } else {
+                    storage.get_block_header(&header.prev_block_hash)?.is_some()
+                };
+
+                if parent_exists {
+                    is_valid = true;
+                }
+            }
+        }
+
+        if is_valid {
+            current_best = current_best.saturating_sub(1);
+        } else {
+            println!("⚠️  Database corruption or invalid block link detected at height {}. Triggering automatic recovery...", current_best);
+            let rollback_height = current_best.saturating_sub(1);
+            if let Some(rollback_hash) = storage.get_block_hash_by_height(rollback_height)? {
+                storage.put_best_block(&rollback_hash)?;
+                storage.put_chain_height(rollback_height)?;
+                println!("✅ Automatic recovery successful: rolled back best tip to height {} ({})", rollback_height, rollback_hash);
+                current_best = rollback_height;
+            } else {
+                let genesis_hash = storage.get_block_hash_by_height(0)?.ok_or("Genesis block missing from database")?;
+                storage.put_best_block(&genesis_hash)?;
+                storage.put_chain_height(0)?;
+                println!("🚨 Severe corruption: rolled back canonical tip to genesis block (height 0)");
+                break;
+            }
+        }
+    }
+
     Ok(storage)
 }

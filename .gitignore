@@ -7,6 +7,9 @@
 /*_integ.log
 /*_restarted.log
 /node_test.log
+/config/
+/crates/node/config/
+/crates/node/data_sumatera*
 
 # Cloudflare tunnel credentials — NEVER commit these
 tunnel.env
