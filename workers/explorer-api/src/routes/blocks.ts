@@ -53,7 +53,7 @@ export async function handleBlocks(request: Request, pool: Pool): Promise<Respon
   }
 
   // 3. Block by height
-  const heightMatch = url.pathname.match(/^\/api\/v1\/block\/height\/(\d+)$/);
+  const heightMatch = url.pathname.match(/^\/api\/v1\/block\/(\d+)$/);
   if (heightMatch) {
     const height = parseInt(heightMatch[1], 10);
     try {

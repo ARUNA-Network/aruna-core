@@ -50,7 +50,7 @@ export default {
     } else if (
       url.pathname === '/api/v1/blocks' ||
       url.pathname === '/api/v1/block/latest' ||
-      url.pathname.startsWith('/api/v1/block/height/') ||
+      /^\/api\/v1\/block\/\d+$/.test(url.pathname) ||
       url.pathname.startsWith('/api/v1/block/hash/')
     ) {
       response = await handleBlocks(request, pool);
@@ -60,28 +60,26 @@ export default {
       response = await handleAddresses(request, pool);
     } else if (url.pathname === '/api/v1/search') {
       response = await handleSearch(request, pool);
-    } else if (url.pathname === '/api/v1/peers') {
+    } else if (url.pathname === '/api/v1/network') {
       try {
-        const peers = await fetchNodeRpc(env.NODE_RPC_URL, '/peers');
-        response = new Response(JSON.stringify(peers), {
+        const [peers, validators] = await Promise.all([
+          fetchNodeRpc(env.NODE_RPC_URL, '/peers').catch(() => ({ peers: [] })),
+          fetchNodeRpc(env.NODE_RPC_URL, '/validators').catch(() => ({ active_validators_count: 1, reward_address: "" })),
+        ]);
+        response = new Response(JSON.stringify({
+          status: 'healthy',
+          peers: peers.peers || [],
+          validators: validators,
+        }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
       } catch (err) {
-        response = new Response(JSON.stringify({ peers: [] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-    } else if (url.pathname === '/api/v1/validators') {
-      try {
-        const validators = await fetchNodeRpc(env.NODE_RPC_URL, '/validators');
-        response = new Response(JSON.stringify(validators), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      } catch (err) {
-        response = new Response(JSON.stringify({ active_validators_count: 1, reward_address: "" }), {
+        response = new Response(JSON.stringify({
+          status: 'offline',
+          peers: [],
+          validators: { active_validators_count: 1, reward_address: "" }
+        }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });

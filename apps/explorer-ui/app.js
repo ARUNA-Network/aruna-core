@@ -33,13 +33,12 @@ const ARUNA = (() => {
     status:         ()          => apiFetch('/status'),
     blocks:         (l, o)     => apiFetch(`/blocks?limit=${l}&offset=${o}`),
     blockLatest:    ()          => apiFetch('/block/latest'),
-    blockByHeight:  (n)         => apiFetch(`/block/height/${n}`),
+    blockByHeight:  (n)         => apiFetch(`/block/${n}`),
     blockByHash:    (h)         => apiFetch(`/block/hash/${h}`),
     transaction:    (hash)      => apiFetch(`/transaction/${hash}`),
     address:        (addr, l, o) => apiFetch(`/address/${addr}?limit=${l}&offset=${o}`),
     search:         (q)         => apiFetch(`/search?q=${encodeURIComponent(q)}`),
-    peers:          ()          => apiFetch('/peers').catch(() => ({ peers: [] })),
-    validators:     ()          => apiFetch('/validators').catch(() => ({ active_validators_count: 1 })),
+    network:        ()          => apiFetch('/network').catch(() => ({ peers: [], validators: { active_validators_count: 1, reward_address: "" } })),
   };
 
   // ── Formatters ───────────────────────────────────────────────────────────────
@@ -414,13 +413,13 @@ const ARUNA = (() => {
   // ── Network Metrics Page ───────────────────────────────────────────────────────
   async function initNetworkPage() {
     try {
-      const stats = await api.stats();
+      const stats = await api.status();
       const html = `
         ${detailRow('Network Name', stats.node ? stats.node.network : 'Sumatera')}
         ${detailRow('Chain ID', stats.node ? String(stats.node.chain_id) : '7777')}
         ${detailRow('Synced', stats.node && stats.node.synced ? '<span class="health-active">✓ Synced</span>' : 'Standalone')}
         ${detailRow('Uptime', stats.node ? `${numFmt(Math.floor(stats.node.uptime_seconds / 3600))} hours` : '—')}
-        ${detailRow('Active Peers', stats.node ? numFmt(stats.node.peer_count) : '1')}
+        ${detailRow('Active Peers', stats.node ? numFmt(stats.node.peer_count) : '0')}
         ${detailRow('Version', stats.node ? stats.node.version : '0.1.0')}
         ${detailRow('Best Block Height', `#${numFmt(stats.height)}`)}
         ${detailRowMono('Best Block Hash', stats.best_hash)}
@@ -431,10 +430,9 @@ const ARUNA = (() => {
     }
   }
 
-  // ── Peers Page ───────────────────────────────────────────────────────────────
   async function initPeersPage() {
     try {
-      const data = await api.peers();
+      const data = await api.network();
       const peers = data.peers || [];
       if (peers.length === 0) {
         setHtml('peers-list-panel', `
@@ -471,16 +469,15 @@ const ARUNA = (() => {
     }
   }
 
-  // ── Nodes/Validators Page ─────────────────────────────────────────────────────
   async function initNodesPage() {
     try {
-      const data = await api.validators();
-      const count = data.active_validators_count || 1;
+      const data = await api.network();
+      const validators = data.validators || { active_validators_count: 1, reward_address: "" };
       
       const rows = `
         <tr>
           <td class="mono">#1 (Local Node)</td>
-          <td class="mono">${escHtml(data.reward_address || 'sum1faucetaddressxxxxxxxxxxxxxxxxxxxxxxxxxx')}</td>
+          <td class="mono">${escHtml(validators.reward_address || 'sum1faucetaddressxxxxxxxxxxxxxxxxxxxxxxxxxx')}</td>
           <td>10,000 ARU (Min Stake)</td>
           <td><span class="health-active">Active Validator</span></td>
         </tr>
