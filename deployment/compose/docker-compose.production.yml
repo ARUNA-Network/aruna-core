@@ -23,24 +23,67 @@ services:
       retries: 3
       start_period: 15s
 
-  # ── Future Services ───────────────────────────────────────────────────────
-  # Uncomment as features are ready:
+  # ── PostgreSQL (Explorer Index DB) ───────────────────────────────────────
+  # ADR-0017: Shared read/write database for indexer and explorer API.
+  # Isolated to localhost — never directly exposed to the internet.
+  postgres:
+    image: postgres:16-alpine
+    container_name: aruna-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aruna
+      POSTGRES_PASSWORD: aruna
+      POSTGRES_DB: aruna_explorer
+    volumes:
+      - /opt/aruna-pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aruna -d aruna_explorer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # explorer:
-  #   image: ghcr.io/aruna-network/explorer:latest
-  #   container_name: aruna-explorer
-  #   restart: unless-stopped
-  #   ports:
-  #     - "127.0.0.1:3000:3000"
-  #   depends_on:
-  #     node:
-  #       condition: service_healthy
+  # ── Indexer ───────────────────────────────────────────────────────────────
+  # ADR-0017: Polls Node RPC, writes to PostgreSQL. Never reads RocksDB.
+  indexer:
+    image: ghcr.io/aruna-network/node:latest
+    container_name: aruna-indexer
+    restart: unless-stopped
+    depends_on:
+      node:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - RUST_LOG=info
+    volumes:
+      - /opt/aruna-config:/app/config:ro
+    command: ["aruna-indexer", "--config", "/app/config/indexer.toml"]
 
-  # metrics:
-  #   image: prom/prometheus:latest
-  #   container_name: aruna-prometheus
-  #   restart: unless-stopped
-  #   volumes:
-  #     - /opt/aruna-monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-  #   ports:
-  #     - "127.0.0.1:9090:9090"
+  # ── Explorer REST API ─────────────────────────────────────────────────────
+  # ADR-0017: Reads from PostgreSQL, serves /api/v1/* to the public via Cloudflare.
+  explorer:
+    image: ghcr.io/aruna-network/node:latest
+    container_name: aruna-explorer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - RUST_LOG=info
+    ports:
+      - "127.0.0.1:3000:3000"   # localhost only — expose via cloudflared or nginx
+    volumes:
+      - /opt/aruna-config:/app/config:ro
+    command: ["aruna-explorer", "--config", "/app/config/explorer.toml"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  # Note: production uses host paths (/opt/aruna-*) for data persistence.
+  # These are not named volumes — they are bind mounts defined above.

@@ -51,6 +51,81 @@ services:
       retries: 3
       start_period: 15s
 
+  # ── PostgreSQL (Explorer Index DB) ───────────────────────────────────────
+  # Shared database for aruna-indexer (writes) and aruna-explorer (reads).
+  # ADR-0017: Explorer Architecture
+  postgres:
+    image: postgres:16-alpine
+    container_name: aruna-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aruna
+      POSTGRES_PASSWORD: aruna
+      POSTGRES_DB: aruna_explorer
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"    # localhost only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aruna -d aruna_explorer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - explorer
+
+  # ── Indexer ───────────────────────────────────────────────────────────────
+  # Polls Node RPC, writes indexed data to PostgreSQL.
+  # ADR-0017: Never reads RocksDB directly.
+  indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    image: ghcr.io/aruna-network/node:local
+    container_name: aruna-indexer
+    restart: unless-stopped
+    depends_on:
+      node:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - RUST_LOG=info
+    volumes:
+      - ./config:/app/config:ro
+    command: ["aruna-indexer", "--config", "/app/config/indexer.toml"]
+    profiles:
+      - explorer
+
+  # ── Explorer REST API ─────────────────────────────────────────────────────
+  # Reads from PostgreSQL, serves /api/v1/* endpoints.
+  # ADR-0017: Never reads RocksDB or Node RPC directly.
+  explorer:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    image: ghcr.io/aruna-network/node:local
+    container_name: aruna-explorer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - RUST_LOG=info
+    ports:
+      - "127.0.0.1:3000:3000"    # localhost only (serve via Cloudflare Tunnel)
+    volumes:
+      - ./config:/app/config:ro
+    command: ["aruna-explorer", "--config", "/app/config/explorer.toml"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    profiles:
+      - explorer
+
   # ── Test Runner ──────────────────────────────────────────────────────────
   # Usage: docker compose run --rm test
   test:
@@ -77,4 +152,6 @@ volumes:
   cargo-cache:
     driver: local
   target-cache:
+    driver: local
+  postgres-data:
     driver: local

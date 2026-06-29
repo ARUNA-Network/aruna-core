@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARUNA Explorer — Sumatera Testnet</title>
+  <meta name="description" content="ARUNA Network Block Explorer. Browse blocks, transactions, and accounts on the Sumatera Testnet." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ── Navigation ── -->
+  <nav class="navbar" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo" aria-label="ARUNA Explorer Home">
+        <div class="logo-icon">⬡</div>
+        <div class="logo-text">
+          <span class="logo-name">ARUNA</span>
+          <span class="logo-sub">Explorer</span>
+        </div>
+      </a>
+      <div class="nav-badge">Sumatera Testnet</div>
+      <form class="nav-search" id="nav-search-form" role="search" aria-label="Search blockchain">
+        <input
+          id="nav-search-input"
+          type="search"
+          placeholder="Search block, tx, or address…"
+          autocomplete="off"
+          aria-label="Search"
+        />
+        <button type="submit" id="nav-search-btn" aria-label="Submit search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
+      </form>
+    </div>
+  </nav>
+
+  <!-- ── Hero Stats ── -->
+  <section class="hero" aria-label="Chain statistics">
+    <div class="container">
+      <div class="hero-title">
+        <h1>ARUNA Block Explorer</h1>
+        <p class="hero-sub">Community Blockchain · Mine Anywhere · Owned By Everyone</p>
+      </div>
+      <div class="stats-grid" id="stats-grid" role="region" aria-live="polite" aria-label="Live chain stats">
+        <div class="stat-card" id="stat-height">
+          <div class="stat-icon">📦</div>
+          <div class="stat-value skeleton" aria-label="Block height">—</div>
+          <div class="stat-label">Block Height</div>
+        </div>
+        <div class="stat-card" id="stat-txs">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-value skeleton" aria-label="Total transactions">—</div>
+          <div class="stat-label">Total Transactions</div>
+        </div>
+        <div class="stat-card" id="stat-time">
+          <div class="stat-icon">⏱</div>
+          <div class="stat-value skeleton" aria-label="Last block time">—</div>
+          <div class="stat-label">Last Block</div>
+        </div>
+        <div class="stat-card" id="stat-best">
+          <div class="stat-icon">🔗</div>
+          <div class="stat-value mono skeleton" aria-label="Best block hash">—</div>
+          <div class="stat-label">Best Hash</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Recent Blocks & Transactions ── -->
+  <main class="container main-grid" id="main-content">
+    <!-- Blocks -->
+    <section class="panel" id="recent-blocks-panel" aria-label="Recent blocks">
+      <div class="panel-header">
+        <h2 class="panel-title">
+          <span class="panel-icon">📦</span> Recent Blocks
+        </h2>
+        <span class="panel-live-dot" aria-label="Live updates"></span>
+      </div>
+      <div class="panel-body" id="blocks-list" role="list" aria-label="Block list" aria-live="polite">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+      <a href="#" class="panel-footer-link" id="view-all-blocks" aria-label="View all blocks">View all blocks →</a>
+    </section>
+
+    <!-- Transactions -->
+    <section class="panel" id="recent-txs-panel" aria-label="Recent transactions">
+      <div class="panel-header">
+        <h2 class="panel-title">
+          <span class="panel-icon">⚡</span> Recent Transactions
+        </h2>
+        <span class="panel-live-dot" aria-label="Live updates"></span>
+      </div>
+      <div class="panel-body" id="txs-list" role="list" aria-label="Transaction list" aria-live="polite">
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+      </div>
+      <a href="#" class="panel-footer-link" id="view-all-txs" aria-label="View all transactions">View all transactions →</a>
+    </section>
+  </main>
+
+  <!-- ── Footer ── -->
+  <footer class="footer" role="contentinfo">
+    <div class="container footer-inner">
+      <span>© 2025 ARUNA Network — <em>Dari Rakyat. Oleh Rakyat. Untuk Rakyat.</em></span>
+      <span class="footer-links">
+        <a href="https://github.com/ARUNA-Network/aruna-core" target="_blank" rel="noopener">GitHub</a>
+      </span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+  <script>
+    // Dashboard-specific initialization
+    document.addEventListener('DOMContentLoaded', () => {
+      ARUNA.initDashboard();
+    });
+  </script>
+</body>
+</html>

@@ -1,246 +1,87 @@
-//! ARUNA Network Explorer API Backend
+//! ARUNA Network Explorer REST API
 //!
-//! A read-only REST API that serves chain data from a RocksDB storage instance.
-//! Designed to run as a sidecar alongside an ARUNA node, pointing at the same
-//! RocksDB directory via a secondary read-only connection.
+//! Serves indexed chain data from PostgreSQL via a versioned REST API.
+//! Reads ONLY from PostgreSQL — never touches RocksDB or the Node RPC directly.
+//!
+//! # ADR Reference
+//! ADR-0017: Explorer Architecture — https://github.com/ARUNA-Network/aruna-core/docs/adr/adr-0017-explorer-architecture.md
 //!
 //! # Endpoints
-//! - GET /block/latest           — best block header + metadata
-//! - GET /block/height/<n>       — block header + tx hashes at height n
-//! - GET /block/hash/<hash>      — block by hash hex
-//! - GET /address/<addr>         — account balance + nonce
-//! - GET /transaction/<hash>     — tx status + block height + confirmations
-//! - GET /stats                  — chain stats (height, best hash, etc.)
+//! - GET /health
+//! - GET /api/v1/stats
+//! - GET /api/v1/blocks?limit=&offset=
+//! - GET /api/v1/block/latest
+//! - GET /api/v1/block/height/:n
+//! - GET /api/v1/block/hash/:hash
+//! - GET /api/v1/transaction/:hash
+//! - GET /api/v1/address/:addr?limit=&offset=
+//! - GET /api/v1/search?q=
 
-use std::sync::Arc;
-use axum::{extract::{Path, State}, response::Json, routing::get, Router};
-use serde_json::{json, Value};
-use aruna_storage::Storage;
-use aruna_primitives::{Address, Hash};
+mod config;
+mod db;
+mod handlers;
+mod models;
 
-/// Shared application state: a read-only storage handle.
-#[derive(Clone)]
-struct AppState {
-    storage: Arc<Storage>,
-}
+use axum::{routing::get, Router};
+use tower_http::cors::{Any, CorsLayer};
+use tracing::info;
 
 #[tokio::main]
 async fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let db_path = args.iter()
-        .position(|a| a == "--db")
-        .and_then(|i| args.get(i + 1))
-        .cloned()
-        .unwrap_or_else(|| "./aruna-data".to_string());
-    let listen = args.iter()
-        .position(|a| a == "--listen")
-        .and_then(|i| args.get(i + 1))
-        .cloned()
-        .unwrap_or_else(|| "127.0.0.1:9090".to_string());
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
 
-    println!("ARUNA Explorer API starting...");
-    println!("DB path: {}", db_path);
-    println!("Listening on: http://{}", listen);
+    info!("ARUNA Network Explorer API v{}", env!("CARGO_PKG_VERSION"));
+    info!("ADR-0017: Reads from PostgreSQL — no RocksDB access.");
 
-    let storage = Storage::open(std::path::Path::new(&db_path))
-        .expect("Failed to open RocksDB. Ensure the node has initialized the database first.");
-    let state = AppState { storage: Arc::new(storage) };
+    // Load config
+    let config_path = config::ExplorerConfig::resolve_path();
+    info!("Loading configuration from: {}", config_path);
+    let cfg = config::ExplorerConfig::from_file(&config_path).unwrap_or_else(|e| {
+        eprintln!("Fatal: failed to load explorer config: {}", e);
+        std::process::exit(1);
+    });
 
+    // Connect to PostgreSQL
+    info!("Connecting to PostgreSQL...");
+    let pool = db::connect(&cfg.database_url).await.unwrap_or_else(|e| {
+        eprintln!("Fatal: failed to connect to PostgreSQL: {}", e);
+        std::process::exit(1);
+    });
+    info!("PostgreSQL connected.");
+
+    // CORS — allow all origins (public explorer API behind Cloudflare)
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
+    // Build router
     let app = Router::new()
-        .route("/block/latest", get(block_latest))
-        .route("/block/height/{n}", get(block_by_height))
-        .route("/block/hash/{hash}", get(block_by_hash))
-        .route("/address/{addr}", get(address_info))
-        .route("/transaction/{hash}", get(transaction_info))
-        .route("/stats", get(chain_stats))
-        .with_state(state);
+        // Health check
+        .route("/health", get(handlers::health))
+        // Versioned API
+        .route("/api/v1/stats",               get(handlers::get_stats))
+        .route("/api/v1/blocks",              get(handlers::get_blocks))
+        .route("/api/v1/block/latest",        get(handlers::get_block_latest))
+        .route("/api/v1/block/height/{n}",    get(handlers::get_block_by_height))
+        .route("/api/v1/block/hash/{hash}",   get(handlers::get_block_by_hash))
+        .route("/api/v1/transaction/{hash}",  get(handlers::get_transaction))
+        .route("/api/v1/address/{addr}",      get(handlers::get_address))
+        .route("/api/v1/search",              get(handlers::search))
+        .layer(cors)
+        .with_state(pool);
 
-    let listener = tokio::net::TcpListener::bind(&listen).await
-        .expect("Failed to bind listener");
-    axum::serve(listener, app).await.expect("Server failed");
-}
+    info!("Explorer API listening on http://{}", cfg.listen);
+    let listener = tokio::net::TcpListener::bind(&cfg.listen).await
+        .unwrap_or_else(|e| {
+            eprintln!("Fatal: failed to bind {}: {}", cfg.listen, e);
+            std::process::exit(1);
+        });
 
-// ── Handlers ──────────────────────────────────────────────────────────────────
-
-async fn block_latest(State(state): State<AppState>) -> Json<Value> {
-    let storage = &state.storage;
-    match storage.get_best_block() {
-        Ok(Some(best_hash)) => {
-            match storage.get_block_header(&best_hash) {
-                Ok(Some(header)) => {
-                    let height = storage.get_chain_height()
-                        .ok().flatten().unwrap_or(0);
-                    Json(json!({
-                        "height": height,
-                        "hash": hex::encode(best_hash.0),
-                        "timestamp": header.timestamp,
-                        "difficulty": header.difficulty.0,
-                        "state_root": hex::encode(header.state_root.0),
-                        "prev_hash": hex::encode(header.prev_block_hash.0),
-                        "merkle_root": hex::encode(header.merkle_root.0),
-                    }))
-                }
-                _ => Json(json!({"error": "Block header not found"})),
-            }
-        }
-        _ => Json(json!({"error": "No best block set — chain may not be initialized"})),
-    }
-}
-
-async fn block_by_height(
-    State(state): State<AppState>,
-    Path(n): Path<u64>,
-) -> Json<Value> {
-    let storage = &state.storage;
-    match storage.get_block_hash_by_height(n) {
-        Ok(Some(hash)) => match storage.get_block_header(&hash) {
-            Ok(Some(header)) => {
-                let tx_hashes = storage.get_block_body(&hash)
-                    .ok().flatten()
-                    .map(|body| body.transactions.iter()
-                        .map(|tx| {
-                            let bytes = bincode::serialize(tx).unwrap_or_default();
-                            hex::encode(aruna_crypto::blake3_hash(&bytes).0)
-                        })
-                        .collect::<Vec<_>>())
-                    .unwrap_or_default();
-                Json(json!({
-                    "height": n,
-                    "hash": hex::encode(hash.0),
-                    "timestamp": header.timestamp,
-                    "difficulty": header.difficulty.0,
-                    "state_root": hex::encode(header.state_root.0),
-                    "tx_count": tx_hashes.len(),
-                    "tx_hashes": tx_hashes,
-                }))
-            }
-            _ => Json(json!({"error": "Block header not found"})),
-        },
-        _ => Json(json!({"error": format!("No block at height {}", n)})),
-    }
-}
-
-async fn block_by_hash(
-    State(state): State<AppState>,
-    Path(hash_hex): Path<String>,
-) -> Json<Value> {
-    let storage = &state.storage;
-    let hash_bytes: [u8; 32] = match hex::decode(&hash_hex)
-        .ok()
-        .and_then(|b| b.try_into().ok())
-    {
-        Some(b) => b,
-        None => return Json(json!({"error": "Invalid hash hex (must be 64 hex chars)"})),
-    };
-    let hash = Hash(hash_bytes);
-    match storage.get_block_header(&hash) {
-        Ok(Some(header)) => {
-            let height = storage.get_block_height_by_hash(&hash)
-                .ok().flatten().unwrap_or(0);
-            let tx_hashes = storage.get_block_body(&hash)
-                .ok().flatten()
-                .map(|body| body.transactions.iter()
-                    .map(|tx| {
-                        let bytes = bincode::serialize(tx).unwrap_or_default();
-                        hex::encode(aruna_crypto::blake3_hash(&bytes).0)
-                    })
-                    .collect::<Vec<_>>())
-                .unwrap_or_default();
-            Json(json!({
-                "height": height,
-                "hash": hash_hex,
-                "timestamp": header.timestamp,
-                "difficulty": header.difficulty.0,
-                "state_root": hex::encode(header.state_root.0),
-                "prev_hash": hex::encode(header.prev_block_hash.0),
-                "tx_count": tx_hashes.len(),
-                "tx_hashes": tx_hashes,
-            }))
-        }
-        _ => Json(json!({"error": "Block not found"})),
-    }
-}
-
-async fn address_info(
-    State(state): State<AppState>,
-    Path(addr_str): Path<String>,
-) -> Json<Value> {
-    let storage = &state.storage;
-    let address = match Address::from_bech32m(&addr_str) {
-        Ok((_, addr)) => addr,
-        Err(_) => {
-            // Try hex fallback
-            match hex::decode(&addr_str)
-                .ok()
-                .and_then(|b| b.try_into().ok())
-                .map(Address::new)
-            {
-                Some(addr) => addr,
-                None => return Json(json!({"error": "Invalid address format"})),
-            }
-        }
-    };
-    match storage.get_account(&address) {
-        Ok(Some((balance, nonce, _, _))) => Json(json!({
-            "address": addr_str,
-            "balance": balance,
-            "nonce": nonce,
-        })),
-        Ok(None) => Json(json!({
-            "address": addr_str,
-            "balance": 0,
-            "nonce": 0,
-        })),
-        Err(e) => Json(json!({"error": format!("Storage error: {:?}", e)})),
-    }
-}
-
-async fn transaction_info(
-    State(state): State<AppState>,
-    Path(hash_hex): Path<String>,
-) -> Json<Value> {
-    let storage = &state.storage;
-    let hash_bytes: [u8; 32] = match hex::decode(&hash_hex)
-        .ok()
-        .and_then(|b| b.try_into().ok())
-    {
-        Some(b) => b,
-        None => return Json(json!({"error": "Invalid tx hash hex"})),
-    };
-    let hash = Hash(hash_bytes);
-
-    // Look up the tx index: which block contains this tx
-    match storage.get_tx_index(&hash) {
-        Ok(Some((block_hash, _tx_index))) => {
-            let block_height = storage.get_block_height_by_hash(&block_hash)
-                .ok().flatten().unwrap_or(0);
-            let best_height = storage.get_chain_height()
-                .ok().flatten().unwrap_or(0);
-            let confirmations = best_height.saturating_sub(block_height) + 1;
-            Json(json!({
-                "tx_hash": hash_hex,
-                "status": "confirmed",
-                "block_hash": hex::encode(block_hash.0),
-                "block_height": block_height,
-                "confirmations": confirmations,
-            }))
-        }
-        Ok(None) => Json(json!({
-            "tx_hash": hash_hex,
-            "status": "not_found",
-        })),
-        Err(e) => Json(json!({"error": format!("Storage error: {:?}", e)})),
-    }
-}
-
-async fn chain_stats(State(state): State<AppState>) -> Json<Value> {
-    let storage = &state.storage;
-    let height = storage.get_chain_height().ok().flatten().unwrap_or(0);
-    let best_hash = storage.get_best_block().ok().flatten()
-        .map(|h| hex::encode(h.0))
-        .unwrap_or_else(|| "none".to_string());
-    Json(json!({
-        "chain_height": height,
-        "best_hash": best_hash,
-    }))
+    axum::serve(listener, app).await.expect("Server error");
 }
