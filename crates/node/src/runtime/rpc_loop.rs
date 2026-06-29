@@ -15,7 +15,7 @@ pub async fn start_rpc_server(context: Arc<NodeContext>) -> Result<(), Box<dyn s
     };
 
     let app = crate::rpc::build_router(app_state);
-    let rpc_addr = format!("127.0.0.1:{}", context.rpc_port);
+    let rpc_addr = format!("0.0.0.0:{}", context.rpc_port);
     println!("Starting RPC server on {}...", rpc_addr);
     let listener = tokio::net::TcpListener::bind(&rpc_addr).await?;
     axum::serve(listener, app).await?;
