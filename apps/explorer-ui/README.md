@@ -1,4 +1,4 @@
-# ARUNA Network Explorer UI
+# ARUNA Network Explorer UI (Static)
 
 Static block explorer frontend for the ARUNA Network.
 
