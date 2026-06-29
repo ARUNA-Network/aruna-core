@@ -1,4 +1,5 @@
 name = "aruna-explorer"
+main = "src/index.ts"
 compatibility_date = "2026-06-29"
 
 [assets]
