@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARUNA Network — Developer Docs</title>
+  <meta name="description" content="Technical documentation and API reference for the ARUNA Network blockchain platform." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Page Layout -->
+  <div class="docs-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" role="navigation" aria-label="Sidebar navigation">
+      <div class="sidebar-header">
+        <a href="/" class="logo" aria-label="ARUNA Docs Home">
+          <span class="logo-icon">⬡</span>
+          <span class="logo-text">ARUNA Docs</span>
+        </a>
+        <div class="search-box">
+          <input type="text" id="docs-search" placeholder="Search documentation..." autocomplete="off" />
+        </div>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">Getting Started</div>
+          <button class="nav-link active" data-tab="tab-welcome">Welcome & Vision</button>
+          <button class="nav-link" data-tab="tab-consensus">Core Consensus</button>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">Core Specifications</div>
+          <button class="nav-link" data-tab="tab-ahash">AHash Algorithm</button>
+          <button class="nav-link" data-tab="tab-cryptography">Cryptography</button>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">API Reference</div>
+          <button class="nav-link" data-tab="tab-rpc">RPC API</button>
+          <button class="nav-link" data-tab="tab-explorer-api">Explorer API</button>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">Architecture Decision Records</div>
+          <button class="nav-link" data-tab="tab-adr17">ADR-0017 (Explorer)</button>
+          <button class="nav-link" data-tab="tab-adr18">ADR-0018 (Platform)</button>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="content-area" role="main">
+      
+      <!-- Welcome & Vision Tab -->
+      <article id="tab-welcome" class="tab-pane active-pane">
+        <h1>Welcome & Vision</h1>
+        <p class="tagline">"Dari Rakyat. Oleh Rakyat. Untuk Rakyat. — Mine Anywhere. Owned By Everyone."</p>
+        <p>ARUNA Network is a community-owned, payment-optimized blockchain project originating from Indonesia, focused on ARM-centric computing, decentralized validator governance, and lightweight node accessibility.</p>
+        
+        <h2>Key Philosophy</h2>
+        <ul>
+          <li><strong>Energy-conscious & CPU-friendly</strong>: Optimized directly for ARM64 servers, Raspberry Pi devices, mini PCs, and screen-off mobile mining.</li>
+          <li><strong>Zero founder privileges</strong>: Clean architecture without founder privileges, hidden inflation minting, or private backdoors.</li>
+          <li><strong>Stateless API access</strong>: Shielding physical validator node RPC interfaces using edge workers for caching and DDoS mitigation.</li>
+        </ul>
+      </article>
+
+      <!-- Core Consensus Tab -->
+      <article id="tab-consensus" class="tab-pane">
+        <h1>Core Consensus Specifications</h1>
+        <p>ARUNA implements an Account-Based Ledger architecture utilizing RocksDB state database storage.</p>
+        
+        <h2>Consensus Parameters</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Specification</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Block Time Target</td>
+              <td>30 Seconds</td>
+            </tr>
+            <tr>
+              <td>Genesis Block Reward</td>
+              <td>25 ARU</td>
+            </tr>
+            <tr>
+              <td>Halving Interval</td>
+              <td>4 Years (4,204,800 blocks)</td>
+            </tr>
+            <tr>
+              <td>Maximum Supply</td>
+              <td>1,000,000,000 ARU</td>
+            </tr>
+            <tr>
+              <td>Genesis Allocations</td>
+              <td>1.5% Premine, 1.5% Founder Vesting (48 mo), 5% Treasury</td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+
+      <!-- AHash Tab -->
+      <article id="tab-ahash" class="tab-pane">
+        <h1>AHash Specification (PoW)</h1>
+        <p>AHash is the PoW mining hash function designed specifically for ARM, CPU, and mobile-friendly mining.</p>
+        
+        <h2>AHash v1 Pipeline</h2>
+        <pre><code class="language-text">Block Header -> BLAKE3 -> AES Mixing -> Argon2 Memory Expansion -> ARM NEON Opt -> Digest</code></pre>
+        
+        <h2>Security Constraints</h2>
+        <ul>
+          <li><strong>Thermal Throttling</strong>: Mobile miners must automatically throttle or pause execution if battery level drops below 20% or thermal limits are exceeded.</li>
+          <li><strong>ASIC Resistance</strong>: Argon2 memory-hard expansion limits hashing parallelization inside custom chips (ASICs).</li>
+        </ul>
+      </article>
+
+      <!-- Cryptography Tab -->
+      <article id="tab-cryptography" class="tab-pane">
+        <h1>Cryptography Specifications</h1>
+        <p>Proven cryptographic standards are employed throughout the ARUNA ledger core.</p>
+        
+        <h2>Standards</h2>
+        <ul>
+          <li><strong>Signature Scheme</strong>: Ed25519 is utilized for fast consensus, validator signing, and wallets. secp256k1 is supported for EVM compatibility.</li>
+          <li><strong>Hashing</strong>: BLAKE3 is the default internal hashing function.</li>
+          <li><strong>Address Format</strong>: Bech32m format. Prefixes: <code>sum1</code> (Sumatera), <code>kal1</code> (Kalimantan), <code>jaw1</code> (Jawa mainnet).</li>
+        </ul>
+      </article>
+
+      <!-- RPC API Tab -->
+      <article id="tab-rpc" class="tab-pane">
+        <h1>RPC API Reference</h1>
+        <p>The Node RPC exposes diagnostic, blockchain inspect, and tx transaction posting routes.</p>
+        
+        <h2>Key Endpoints</h2>
+        <ul>
+          <li><code>GET /status</code>: Returns node version, height, best block, sync status, and peer counts.</li>
+          <li><code>GET /live</code>: Liveness check. Always returns <code>200 OK</code>.</li>
+          <li><code>GET /ready</code>: Readiness check. Verifies database access and initialization state.</li>
+          <li><code>GET /metrics</code>: Telemetry stats formatted for Prometheus.</li>
+          <li><code>POST /tx</code>: Submits a serialized transaction envelope to the mempool.</li>
+        </ul>
+      </article>
+
+      <!-- Explorer API Tab -->
+      <article id="tab-explorer-api" class="tab-pane">
+        <h1>Explorer API Reference</h1>
+        <p>Exposes paginated indexed ledger data reading from the PostgreSQL database.</p>
+        
+        <h2>Endpoints</h2>
+        <ul>
+          <li><code>GET /api/v1/blocks?limit=&amp;offset=</code>: Returns block summaries list.</li>
+          <li><code>GET /api/v1/transaction/:hash</code>: Returns transaction detail parameters.</li>
+          <li><code>GET /api/v1/address/:address</code>: Returns balance and transaction history.</li>
+        </ul>
+      </article>
+
+      <!-- ADR-0017 Tab -->
+      <article id="tab-adr17" class="tab-pane">
+        <h1>ADR-0017: Explorer Architecture</h1>
+        <p>Direct RocksDB reading by the public explorer is prohibited to avoid I/O bottlenecks on the validator node.</p>
+        <p>Instead, a dedicated indexer sidecar polls Node RPC endpoints and populates PostgreSQL, which is read exclusively by the REST API and explorer UI.</p>
+      </article>
+
+      <!-- ADR-0018 Tab -->
+      <article id="tab-adr18" class="tab-pane">
+        <h1>ADR-0018: Platform Evolution</h1>
+        <p>Decouples ledger core from Edge workers and applications. Frontends must only connect to API layers or the Edge rpc-gateway proxy, completely shielding validator ports from direct public traffic.</p>
+      </article>
+      
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

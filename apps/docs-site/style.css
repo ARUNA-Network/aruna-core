@@ -1,0 +1,230 @@
+/* ── ARUNA Docs Site Stylesheet ────────────────────────────────────────── */
+/* Layout, sidebar, code blocks, dark/premium design system                 */
+
+:root {
+  --brand-primary:    hsl(258, 85%, 65%);
+  --brand-secondary:  hsl(195, 90%, 55%);
+  --brand-glow:       hsla(258, 85%, 65%, 0.15);
+
+  --bg-base:          hsl(222, 30%, 6%);
+  --bg-elevated:      hsl(225, 28%, 10%);
+  --bg-panel:         hsl(224, 26%, 13%);
+  --border:           hsla(224, 30%, 50%, 0.12);
+
+  --text-primary:     hsl(220, 30%, 95%);
+  --text-secondary:   hsl(220, 20%, 75%);
+  --text-muted:       hsl(220, 15%, 50%);
+
+  --code-bg:          hsl(224, 28%, 8%);
+  
+  --sidebar-w: 280px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg-base);
+  color: var(--text-secondary);
+  font-family: 'Outfit', sans-serif;
+  min-height: 100vh;
+}
+
+.docs-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar Navigation */
+.sidebar {
+  width: var(--sidebar-w);
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  padding: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 20px;
+  background: linear-gradient(135deg, var(--text-primary) 30%, var(--brand-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 16px;
+}
+
+.logo-icon {
+  font-size: 24px;
+  color: var(--brand-primary);
+}
+
+.search-box input {
+  width: 100%;
+  height: 38px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 0 12px;
+  outline: none;
+}
+
+.search-box input:focus {
+  border-color: var(--brand-primary);
+}
+
+.sidebar-nav {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 6px;
+}
+
+.nav-link {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.nav-link:hover {
+  background: hsla(220, 20%, 90%, 0.04);
+  color: var(--text-primary);
+}
+
+.nav-link.active {
+  background: hsla(258, 85%, 65%, 0.12);
+  color: var(--brand-primary);
+  font-weight: 600;
+}
+
+/* Main Content Area */
+.content-area {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  padding: 60px 80px;
+  max-width: 900px;
+  overflow-y: auto;
+}
+
+/* Documentation Content Styling */
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active-pane {
+  display: block;
+}
+
+h1 {
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 24px;
+}
+
+.tagline {
+  font-size: 18px;
+  font-style: italic;
+  color: var(--brand-secondary);
+  margin-bottom: 24px;
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 36px;
+  margin-bottom: 16px;
+}
+
+p {
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+ul {
+  margin-left: 24px;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+li {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  margin-bottom: 32px;
+}
+
+th, td {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  text-align: left;
+}
+
+th {
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-panel);
+}
+
+td {
+  font-size: 14px;
+}
+
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  margin-bottom: 24px;
+}
+
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--brand-secondary);
+}
