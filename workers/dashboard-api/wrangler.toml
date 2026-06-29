@@ -1,0 +1,7 @@
+name = "aruna-dashboard-api"
+main = "src/index.js"
+compatibility_date = "2024-03-01"
+
+[vars]
+# Internal Node RPC URL accessible via Cloudflare Tunnel
+NODE_RPC_URL = "http://localhost:8080"
