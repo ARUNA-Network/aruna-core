@@ -48,8 +48,8 @@ async function loadNetworkStatus() {
       ${detailRow('Uptime', stats.node ? `${numFmt(Math.floor(stats.node.uptime_seconds / 3600))} hours` : '—')}
       ${detailRow('Active Peers', stats.node ? numFmt(stats.node.peer_count) : '0')}
       ${detailRow('Version', stats.node ? stats.node.version : '0.1.0')}
-      ${detailRow('Best Block Height', `#${numFmt(stats.height)}`)}
-      ${detailRowMono('Best Block Hash', stats.best_hash)}
+      ${detailRow('Best Block Height', `<a href="/block/${stats.height}">#${numFmt(stats.height)}</a>`)}
+      ${detailRowMono('Best Block Hash', `<a href="/block/hash/${stats.best_hash}">${stats.best_hash}</a>`)}
     `;
     setHtml('network-metrics-detail', html);
   } catch (err) {

@@ -34,17 +34,13 @@ function showError(containerId: string, message: string) {
   `);
 }
 
-function getParam(name: string): string | null {
-  return new URLSearchParams(window.location.search).get(name);
-}
-
 function txListItem(tx: Transaction): string {
   return `
-    <a href="tx.html?hash=${encodeURIComponent(tx.hash)}" class="list-item tx-row" role="listitem" aria-label="Transaction ${tx.hash}">
+    <a href="/transaction/${encodeURIComponent(tx.hash)}" class="list-item tx-row" role="listitem" aria-label="Transaction ${tx.hash}">
       <span class="hash-short">${escHtml(shortHash(tx.hash))}</span>
       <span class="item-meta">
-        <a href="address.html?addr=${encodeURIComponent(tx.sender)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.sender))}</a>
-        → <a href="address.html?addr=${encodeURIComponent(tx.recipient)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.recipient))}</a>
+        <a href="/address/${encodeURIComponent(tx.sender)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.sender))}</a>
+        → <a href="/address/${encodeURIComponent(tx.recipient)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.recipient))}</a>
       </span>
       <span class="amount-badge">${microAruToAru(tx.amount)} ARU</span>
     </a>
@@ -70,15 +66,20 @@ function detailRowMono(label: string, value: string): string {
 }
 
 async function loadBlockDetail() {
-  const hash = getParam('hash');
-  const height = getParam('height');
+  const path = window.location.pathname;
 
   let block: Block;
   try {
-    if (hash) {
+    if (path.startsWith('/block/hash/')) {
+      const hash = path.substring('/block/hash/'.length).trim();
       block = await getBlock(hash);
-    } else if (height !== null && height !== undefined) {
-      block = await getBlock(Number(height));
+    } else if (path.startsWith('/block/')) {
+      const param = path.substring('/block/'.length).trim();
+      if (param && param !== 'latest') {
+        block = await getBlock(param);
+      } else {
+        block = await getLatestBlock();
+      }
     } else {
       block = await getLatestBlock();
     }
@@ -93,9 +94,9 @@ async function loadBlockDetail() {
   setText('breadcrumb-id', `#${block.height}`);
 
   const html = `
-    ${detailRow('Height', `<a href="block.html?height=${block.height - 1}">#${numFmt(block.height)}</a>`)}
+    ${detailRow('Height', `<a href="/block/${block.height - 1}">#${numFmt(block.height)}</a>`)}
     ${detailRowMono('Hash', block.hash)}
-    ${detailRowMono('Previous', `<a href="block.html?hash=${block.prev_hash}">${shortHash(block.prev_hash)}</a>`)}
+    ${detailRowMono('Previous', `<a href="/block/hash/${block.prev_hash}">${shortHash(block.prev_hash)}</a>`)}
     ${detailRowMono('Merkle Root', block.merkle_root)}
     ${detailRowMono('State Root', block.state_root)}
     ${detailRow('Timestamp', escHtml(timestamp(block.timestamp)))}

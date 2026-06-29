@@ -26,10 +26,6 @@ function showError(containerId: string, message: string) {
   `);
 }
 
-function getParam(name: string): string | null {
-  return new URLSearchParams(window.location.search).get(name);
-}
-
 function detailRow(label: string, valueHtml: string): string {
   return `
     <div class="detail-row">
@@ -49,7 +45,12 @@ function detailRowMono(label: string, value: string): string {
 }
 
 async function loadTxDetail() {
-  const hash = getParam('hash');
+  const path = window.location.pathname;
+  if (!path.startsWith('/transaction/')) {
+    showError('tx-detail-card', 'Invalid transaction path.');
+    return;
+  }
+  const hash = path.substring('/transaction/'.length).trim();
   if (!hash) {
     showError('tx-detail-card', 'No transaction hash provided.');
     return;
@@ -64,11 +65,11 @@ async function loadTxDetail() {
     const html = `
       ${detailRow('Status', '<span class="tag-confirmed">✓ Confirmed</span>')}
       ${detailRowMono('Hash', tx.hash)}
-      ${detailRow('Block', `<a href="block.html?height=${tx.block_height}">#${numFmt(tx.block_height)}</a>`)}
-      ${detailRowMono('Block Hash', `<a href="block.html?hash=${tx.block_hash}">${shortHash(tx.block_hash)}</a>`)}
+      ${detailRow('Block', `<a href="/block/${tx.block_height}">#${numFmt(tx.block_height)}</a>`)}
+      ${detailRowMono('Block Hash', `<a href="/block/hash/${tx.block_hash}">${shortHash(tx.block_hash)}</a>`)}
       ${detailRow('Index in Block', String(tx.tx_index))}
-      ${detailRow('From', `<a href="address.html?addr=${encodeURIComponent(tx.sender)}" class="mono">${escHtml(shortHash(tx.sender))}</a>`)}
-      ${detailRow('To', `<a href="address.html?addr=${encodeURIComponent(tx.recipient)}" class="mono">${escHtml(shortHash(tx.recipient))}</a>`)}
+      ${detailRow('From', `<a href="/address/${encodeURIComponent(tx.sender)}" class="mono">${escHtml(shortHash(tx.sender))}</a>`)}
+      ${detailRow('To', `<a href="/address/${encodeURIComponent(tx.recipient)}" class="mono">${escHtml(shortHash(tx.recipient))}</a>`)}
       ${detailRow('Amount', `${microAruToAru(tx.amount)} ARU`)}
       ${detailRow('Fee', `${microAruToAru(tx.fee)} ARU`)}
       ${detailRow('Nonce', numFmt(tx.nonce_val))}

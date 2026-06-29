@@ -18,20 +18,20 @@ export function setupSearchBar(formId: string, inputId: string): void {
       }
       const first = results[0];
       if (first.kind === 'block') {
-        window.location.href = `block.html?hash=${encodeURIComponent(first.value)}`;
+        window.location.href = `/block/hash/${encodeURIComponent(first.value)}`;
       } else if (first.kind === 'transaction') {
-        window.location.href = `tx.html?hash=${encodeURIComponent(first.value)}`;
+        window.location.href = `/transaction/${encodeURIComponent(first.value)}`;
       } else if (first.kind === 'address') {
-        window.location.href = `address.html?addr=${encodeURIComponent(first.value)}`;
+        window.location.href = `/address/${encodeURIComponent(first.value)}`;
       }
     } catch (err) {
       // Fallbacks if search endpoint fails or isn't populated
       if (/^\d+$/.test(q)) {
-        window.location.href = `block.html?height=${encodeURIComponent(q)}`;
+        window.location.href = `/block/${encodeURIComponent(q)}`;
       } else if (q.length === 64) {
-        window.location.href = `block.html?hash=${encodeURIComponent(q)}`;
+        window.location.href = `/block/hash/${encodeURIComponent(q)}`;
       } else {
-        window.location.href = `address.html?addr=${encodeURIComponent(q)}`;
+        window.location.href = `/address/${encodeURIComponent(q)}`;
       }
     }
   });

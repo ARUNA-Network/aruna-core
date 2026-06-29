@@ -27,17 +27,13 @@ function showError(containerId: string, message: string) {
   `);
 }
 
-function getParam(name: string): string | null {
-  return new URLSearchParams(window.location.search).get(name);
-}
-
 function txListItem(tx: Transaction): string {
   return `
-    <a href="tx.html?hash=${encodeURIComponent(tx.hash)}" class="list-item tx-row" role="listitem" aria-label="Transaction ${tx.hash}">
+    <a href="/transaction/${encodeURIComponent(tx.hash)}" class="list-item tx-row" role="listitem" aria-label="Transaction ${tx.hash}">
       <span class="hash-short">${escHtml(shortHash(tx.hash))}</span>
       <span class="item-meta">
-        <a href="address.html?addr=${encodeURIComponent(tx.sender)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.sender))}</a>
-        → <a href="address.html?addr=${encodeURIComponent(tx.recipient)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.recipient))}</a>
+        <a href="/address/${encodeURIComponent(tx.sender)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.sender))}</a>
+        → <a href="/address/${encodeURIComponent(tx.recipient)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.recipient))}</a>
       </span>
       <span class="amount-badge">${microAruToAru(tx.amount)} ARU</span>
     </a>
@@ -45,7 +41,12 @@ function txListItem(tx: Transaction): string {
 }
 
 async function loadAddressDetail() {
-  const addr = getParam('addr');
+  const path = window.location.pathname;
+  if (!path.startsWith('/address/')) {
+    showError('addr-txs-list', 'Invalid address path.');
+    return;
+  }
+  const addr = path.substring('/address/'.length).trim();
   if (!addr) {
     showError('addr-txs-list', 'No address provided.');
     return;

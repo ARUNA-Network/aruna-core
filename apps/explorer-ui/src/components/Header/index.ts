@@ -3,14 +3,14 @@ export function renderHeader(activePage: string): void {
   if (!headerEl) return;
 
   const pages = [
-    { name: 'Home', url: 'index.html', key: 'home' },
-    { name: 'Block', url: 'block.html', key: 'block' },
-    { name: 'Transaction', url: 'tx.html', key: 'tx' },
-    { name: 'Address', url: 'address.html', key: 'address' },
-    { name: 'Network', url: 'network.html', key: 'network' },
-    { name: 'Supply', url: 'supply.html', key: 'supply' },
-    { name: 'Peers', url: 'peers.html', key: 'peers' },
-    { name: 'Nodes', url: 'nodes.html', key: 'nodes' },
+    { name: 'Home', url: '/', key: 'home' },
+    { name: 'Block', url: '/block', key: 'block' },
+    { name: 'Transaction', url: '/transactions', key: 'tx' },
+    { name: 'Address', url: '/address', key: 'address' },
+    { name: 'Network', url: '/network', key: 'network' },
+    { name: 'Supply', url: '/stats', key: 'supply' },
+    { name: 'Peers', url: '/peers', key: 'peers' },
+    { name: 'Nodes', url: '/nodes', key: 'nodes' },
   ];
 
   const menuHtml = pages
@@ -25,7 +25,7 @@ export function renderHeader(activePage: string): void {
 
   headerEl.innerHTML = `
     <div class="nav-inner">
-      <a href="index.html" class="nav-logo" aria-label="ARUNA Explorer Home">
+      <a href="/" class="nav-logo" aria-label="ARUNA Explorer Home">
         <div class="logo-icon">⬡</div>
         <div class="logo-text">
           <span class="logo-name">ARUNA</span>

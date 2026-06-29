@@ -32,11 +32,11 @@ function showError(containerId: string, message: string) {
 
 function txListItem(tx: Transaction): string {
   return `
-    <a href="tx.html?hash=${encodeURIComponent(tx.hash)}" class="list-item tx-row" role="listitem" aria-label="Transaction ${tx.hash}">
+    <a href="/transaction/${encodeURIComponent(tx.hash)}" class="list-item tx-row" role="listitem" aria-label="Transaction ${tx.hash}">
       <span class="hash-short">${escHtml(shortHash(tx.hash))}</span>
       <span class="item-meta">
-        <a href="address.html?addr=${encodeURIComponent(tx.sender)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.sender))}</a>
-        → <a href="address.html?addr=${encodeURIComponent(tx.recipient)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.recipient))}</a>
+        <a href="/address/${encodeURIComponent(tx.sender)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.sender))}</a>
+        → <a href="/address/${encodeURIComponent(tx.recipient)}" onclick="event.stopPropagation()">${escHtml(shortHash(tx.recipient))}</a>
       </span>
       <span class="amount-badge">${microAruToAru(tx.amount)} ARU</span>
     </a>
@@ -106,7 +106,7 @@ async function loadDashboard() {
     const latest = await getLatestBlock();
     if (latest) {
       const html = `
-        ${detailRow('Height', `#${numFmt(latest.height)}`)}
+        ${detailRow('Height', `<a href="/block/${latest.height}">#${numFmt(latest.height)}</a>`)}
         ${detailRowMono('Hash', latest.hash)}
         ${detailRow('Timestamp', timestamp(latest.timestamp))}
         ${detailRow('Difficulty', numFmt(latest.difficulty))}

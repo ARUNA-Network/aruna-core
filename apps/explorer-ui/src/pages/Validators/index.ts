@@ -28,7 +28,11 @@ async function loadNodesList() {
     const rows = `
       <tr>
         <td class="mono">#1 (Local Node)</td>
-        <td class="mono">${escHtml(validators.reward_address || 'sum1faucetaddressxxxxxxxxxxxxxxxxxxxxxxxxxx')}</td>
+        <td class="mono">
+          <a href="/address/${encodeURIComponent(validators.reward_address || 'sum1faucetaddressxxxxxxxxxxxxxxxxxxxxxxxxxx')}">
+            ${escHtml(validators.reward_address || 'sum1faucetaddressxxxxxxxxxxxxxxxxxxxxxxxxxx')}
+          </a>
+        </td>
         <td>10,000 ARU (Min Stake)</td>
         <td><span class="health-active">Active Validator</span></td>
       </tr>
