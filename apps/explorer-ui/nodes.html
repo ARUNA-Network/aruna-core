@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="./src/styles/main.css">
 </head>
 <body>
 
@@ -58,11 +58,9 @@
     </div>
   </footer>
 
-  <script src="app.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      ARUNA.initNodesPage();
-    });
+  <script type="module">
+    import { initValidators } from './src/pages/Validators/index.ts';
+    initValidators();
   </script>
 </body>
 </html>

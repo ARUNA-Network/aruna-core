@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "description": "ARUNA Network Block Explorer UI",
   "scripts": {
-    "build": "rm -rf dist && mkdir -p dist && cp *.html style.css app.js dist/"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.1.4",
+    "@types/node": "^20.11.24"
   }
 }
