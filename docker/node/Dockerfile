@@ -2,13 +2,20 @@
 # ARUNA Network — Unified Node Dockerfile
 #
 # Build targets:
-#   dev       — Full development environment (DevContainer, local CI)
-#   builder   — Compiles the release binary (internal stage)
+#   dev       — Full development environment (DevContainer, local CI, image validation)
+#   builder   — Compiles the release binary (internal stage, not shipped)
 #   runtime   — Minimal production image
 #
 # Usage:
-#   DevContainer / dev image  : docker build --target dev -t aruna-node-dev .
-#   Production node image     : docker build -t ghcr.io/aruna-network/node:latest .
+#   DevContainer / dev image  : docker build -f docker/node/Dockerfile --target dev -t aruna-node-dev .
+#   Production node image     : docker build -f docker/node/Dockerfile -t ghcr.io/aruna-network/node:latest .
+#
+# Package pinning policy:
+#   All APT packages are pinned to their exact version in Ubuntu 24.04 LTS
+#   as audited on 2026-06-30. To re-audit: run the following inside ubuntu:24.04
+#   and update the versions below:
+#     apt-get update && apt-cache show <pkg> | grep '^Version:'
+#   The Rust toolchain version must always match rust-toolchain.toml.
 #
 # ADR reference: docs/adr/ (Infrastructure / Docker)
 # =============================================================================
@@ -21,25 +28,27 @@ FROM ubuntu:24.04 AS dev
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install compilation dependencies (GCC 14, LLVM 18, Clang 18, CMake, RocksDB)
-RUN apt-get update && apt-get install -y \
-    curl \
+# ── Pinned APT packages ───────────────────────────────────────────────────────
+# Audited: 2026-06-30 against ubuntu:24.04 (noble)
+# Use --no-install-recommends to prevent non-deterministic transitive packages.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    "curl=8.5.0-2ubuntu10.9" \
     git \
     build-essential \
     pkg-config \
-    libssl-dev \
-    gcc-14 \
-    g++-14 \
-    clang-18 \
-    llvm-18 \
-    libclang-18-dev \
-    cmake \
-    librocksdb-dev \
-    libbz2-dev \
-    zlib1g-dev \
-    libsnappy-dev \
-    liblz4-dev \
-    libzstd-dev \
+    "libssl-dev=3.0.13-0ubuntu3.11" \
+    "gcc-14=14.2.0-4ubuntu2~24.04.1" \
+    "g++-14=14.2.0-4ubuntu2~24.04.1" \
+    "clang-18=1:18.1.3-1ubuntu1" \
+    "llvm-18=1:18.1.3-1ubuntu1" \
+    "libclang-18-dev=1:18.1.3-1ubuntu1" \
+    "cmake=3.28.3-1build7" \
+    "librocksdb-dev=8.9.1-2" \
+    "libbz2-dev=1.0.8-5.1build0.1" \
+    "zlib1g-dev=1:1.3.dfsg-3.1ubuntu2.1" \
+    "libsnappy-dev=1.1.10-1build1" \
+    "liblz4-dev=1.9.4-1build1.1" \
+    "libzstd-dev=1.5.5+dfsg2-2build1.1" \
     sudo \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -57,15 +66,22 @@ ENV CXXFLAGS="-include cstdint"
 ENV CLANG_PATH=/usr/bin/clang
 ENV LIBCLANG_PATH=/usr/lib/llvm-18/lib
 
-# Install pinned Rust toolchain
+# ── Pinned Rust toolchain ─────────────────────────────────────────────────────
+# Version MUST match rust-toolchain.toml. Verified via TLS from static.rust-lang.org.
+# rustup itself is the version-management layer; the toolchain version is immutable.
 ENV RUSTUP_HOME=/usr/local/rustup
 ENV CARGO_HOME=/usr/local/cargo
 ENV PATH=/usr/local/cargo/bin:$PATH
+ARG RUST_VERSION=1.96.0
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain 1.96.0 --profile default
+    | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile default
 
-# Sanity-check: all required tools must be present
-RUN rustc --version && cargo --version && gcc --version && cmake --version && clang --version
+# ── Toolchain sanity check ────────────────────────────────────────────────────
+# Build fails here immediately if any tool is missing or resolves to a wrong version.
+RUN rustc --version && cargo --version \
+    && gcc --version && g++ --version \
+    && cmake --version && clang --version \
+    && echo "✓ All toolchain components verified"
 
 
 # ── Stage 2: builder ─────────────────────────────────────────────────────────
@@ -80,16 +96,17 @@ RUN cargo build --release -p aruna-node
 
 # ── Stage 3: runtime ─────────────────────────────────────────────────────────
 # Minimal image shipped to production.
-# Contains only the binary, config, and runtime libraries.
+# Contains only the binary, config, and pinned runtime libraries.
+# No compiler, no Rust, no build toolchain.
 FROM ubuntu:24.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Only runtime libraries — no build toolchain
-RUN apt-get update && apt-get install -y \
-    libssl-dev \
+# Pinned runtime libraries only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    "libssl-dev=3.0.13-0ubuntu3.11" \
     ca-certificates \
-    curl \
+    "curl=8.5.0-2ubuntu10.9" \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
