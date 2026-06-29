@@ -22,10 +22,24 @@ pub struct GenesisParameters {
 }
 
 pub fn load_genesis_config() -> Result<GenesisConfig, Box<dyn std::error::Error>> {
-    let config_path = Path::new("config/genesis.sumatera.toml");
-    if !config_path.exists() {
-        return Err(format!("Genesis configuration file not found at: {:?}", config_path).into());
+    let paths = vec![
+        std::path::Path::new("config/genesis.sumatera.toml"),
+        std::path::Path::new("../config/genesis.sumatera.toml"),
+        std::path::Path::new("../../config/genesis.sumatera.toml"),
+    ];
+
+    let mut resolved_path = None;
+    for p in paths {
+        if p.exists() {
+            resolved_path = Some(p);
+            break;
+        }
     }
+
+    let config_path = resolved_path.ok_or_else(|| {
+        "Genesis configuration file not found in any of the standard locations (config/, ../config/, or ../../config/)"
+    })?;
+
     let config_str = std::fs::read_to_string(config_path)?;
     let config: GenesisConfig = toml::from_str(&config_str)?;
     Ok(config)

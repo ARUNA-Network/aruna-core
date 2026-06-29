@@ -461,6 +461,8 @@ async fn get_supply(
     let genesis_config = crate::bootstrap::load_genesis_config()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to load genesis config: {:?}", e)))?;
 
+
+
     let m_aru = 1_000_000_u64;
     let mut initial_supply_micro = 0_u64;
     for amount_aru in genesis_config.allocations.values() {
@@ -568,6 +570,240 @@ async fn post_snapshot(
     }))
 }
 
+// --- NEW RPC ENDPOINTS (FASE 3) ---
+
+#[derive(Serialize)]
+pub struct ValidatorResponse {
+    pub reward_address: String,
+    pub reward_address_balance: u64,
+    pub minimum_stake: u64,
+    pub active_validators_count: usize,
+}
+
+#[derive(Serialize)]
+pub struct TreasuryResponse {
+    pub reward_address: String,
+    pub reward_address_balance: u64,
+    pub allocation_percent: u8,
+}
+
+#[derive(Serialize)]
+pub struct RewardAddressResponse {
+    pub reward_address: String,
+}
+
+#[derive(Serialize)]
+pub struct AccountBalanceResponse {
+    pub address: String,
+    pub balance: u64,
+}
+
+#[derive(Serialize)]
+pub struct AccountNonceResponse {
+    pub address: String,
+    pub nonce: u64,
+}
+
+#[derive(Serialize)]
+pub struct PeerCountResponse {
+    pub count: usize,
+}
+
+async fn get_block_by_hash(
+    AxumPath(hash_str): AxumPath<String>,
+    State(state): State<AppState>,
+) -> Result<Json<BlockDetailResponse>, (StatusCode, String)> {
+    let hash = Hash::from_hex(&hash_str)
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid hash format: {:?}", e)))?;
+
+    let header = state.storage.get_block_header(&hash)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Block header missing for hash {}", hash)))?;
+
+    let body = state.storage.get_block_body(&hash)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!("Block body missing for hash {}", hash)))?;
+
+    Ok(Json(BlockDetailResponse {
+        hash: hash.to_string(),
+        header,
+        body,
+    }))
+}
+
+async fn get_block_by_height(
+    AxumPath(height): AxumPath<u64>,
+    State(state): State<AppState>,
+) -> Result<Json<BlockDetailResponse>, (StatusCode, String)> {
+    let hash = state.storage.get_block_hash_by_height(height)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Block not found at height {}", height)))?;
+
+    let header = state.storage.get_block_header(&hash)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Block header missing for hash {}", hash)))?;
+
+    let body = state.storage.get_block_body(&hash)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!("Block body missing for hash {}", hash)))?;
+
+    Ok(Json(BlockDetailResponse {
+        hash: hash.to_string(),
+        header,
+        body,
+    }))
+}
+
+async fn get_block_latest(
+    State(state): State<AppState>,
+) -> Result<Json<BlockDetailResponse>, (StatusCode, String)> {
+    let hash = state.storage.get_best_block()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Best block not found".to_string()))?;
+
+    let header = state.storage.get_block_header(&hash)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Block header missing for hash {}", hash)))?;
+
+    let body = state.storage.get_block_body(&hash)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, format!("Block body missing for hash {}", hash)))?;
+
+    Ok(Json(BlockDetailResponse {
+        hash: hash.to_string(),
+        header,
+        body,
+    }))
+}
+
+async fn get_pending_transactions(
+    State(state): State<AppState>,
+) -> Json<Vec<MempoolTxResponse>> {
+    get_mempool(State(state)).await
+}
+
+async fn get_account_balance(
+    AxumPath(address_str): AxumPath<String>,
+    State(state): State<AppState>,
+) -> Result<Json<AccountBalanceResponse>, (StatusCode, String)> {
+    let (_, addr) = Address::from_bech32m(&address_str)
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid address format: {:?}", e)))?;
+
+    let account_state = state.storage.get_account(&addr)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?;
+
+    let balance = match account_state {
+        Some((bal, _, _, _)) => bal,
+        None => 0,
+    };
+
+    Ok(Json(AccountBalanceResponse {
+        address: address_str,
+        balance,
+    }))
+}
+
+async fn get_account_nonce(
+    AxumPath(address_str): AxumPath<String>,
+    State(state): State<AppState>,
+) -> Result<Json<AccountNonceResponse>, (StatusCode, String)> {
+    let (_, addr) = Address::from_bech32m(&address_str)
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid address format: {:?}", e)))?;
+
+    let account_state = state.storage.get_account(&addr)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?;
+
+    let nonce = match account_state {
+        Some((_, non, _, _)) => non,
+        None => 0,
+    };
+
+    Ok(Json(AccountNonceResponse {
+        address: address_str,
+        nonce,
+    }))
+}
+
+async fn get_supply_circulating(
+    State(state): State<AppState>,
+) -> Result<String, (StatusCode, String)> {
+    let supply_res = get_supply(State(state)).await?;
+    Ok(format!("{}", supply_res.0.circulating_supply))
+}
+
+async fn get_supply_total(
+    State(state): State<AppState>,
+) -> Result<String, (StatusCode, String)> {
+    let supply_res = get_supply(State(state)).await?;
+    Ok(format!("{}", supply_res.0.max_supply))
+}
+
+async fn get_peers_count(
+    State(state): State<AppState>,
+) -> Json<PeerCountResponse> {
+    let count = state.p2p_manager.peer_count();
+    Json(PeerCountResponse { count })
+}
+
+async fn get_validators(
+    State(state): State<AppState>,
+) -> Result<Json<ValidatorResponse>, (StatusCode, String)> {
+    let validator_addr = state.consensus_engine.validator_reward_addr;
+    let account_state = state.storage.get_account(&validator_addr)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?;
+
+    let reward_address_balance = match account_state {
+        Some((bal, _, _, _)) => bal,
+        None => 0,
+    };
+
+    let reward_address = validator_addr.to_bech32m("sum").unwrap();
+
+    Ok(Json(ValidatorResponse {
+        reward_address,
+        reward_address_balance,
+        minimum_stake: 10_000,
+        active_validators_count: 1,
+    }))
+}
+
+async fn get_validator_reward_address(
+    State(state): State<AppState>,
+) -> Result<Json<RewardAddressResponse>, (StatusCode, String)> {
+    let validator_addr = state.consensus_engine.validator_reward_addr;
+    let reward_address = validator_addr.to_bech32m("sum").unwrap();
+    Ok(Json(RewardAddressResponse { reward_address }))
+}
+
+async fn get_treasury(
+    State(state): State<AppState>,
+) -> Result<Json<TreasuryResponse>, (StatusCode, String)> {
+    let treasury_addr = state.consensus_engine.treasury_reward_addr;
+    let account_state = state.storage.get_account(&treasury_addr)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {:?}", e)))?;
+
+    let reward_address_balance = match account_state {
+        Some((bal, _, _, _)) => bal,
+        None => 0,
+    };
+
+    let reward_address = treasury_addr.to_bech32m("sum").unwrap();
+
+    Ok(Json(TreasuryResponse {
+        reward_address,
+        reward_address_balance,
+        allocation_percent: 5,
+    }))
+}
+
+async fn get_treasury_reward_address(
+    State(state): State<AppState>,
+) -> Result<Json<RewardAddressResponse>, (StatusCode, String)> {
+    let treasury_addr = state.consensus_engine.treasury_reward_addr;
+    let reward_address = treasury_addr.to_bech32m("sum").unwrap();
+    Ok(Json(RewardAddressResponse { reward_address }))
+}
+
 pub async fn track_rpc_requests(
     State(state): State<AppState>,
     request: axum::extract::Request,
@@ -583,17 +819,33 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health", get(get_health))
         .route("/tx", post(post_tx))
         .route("/tx/:hash", get(get_transaction_by_hash))
+        .route("/tx/pending", get(get_pending_transactions))
+        .route("/transaction/:hash", get(get_transaction_by_hash))
+        .route("/transaction/hash/:hash", get(get_transaction_by_hash))
         .route("/chain/tip", get(get_chain_tip))
         .route("/blocks", get(get_blocks))
+        .route("/block/latest", get(get_block_latest))
         .route("/block/:param", get(get_block_by_param))
+        .route("/block/hash/:hash", get(get_block_by_hash))
+        .route("/block/height/:height", get(get_block_by_height))
         .route("/address/:address", get(get_address_state))
         .route("/account/:address", get(get_address_state))
-        .route("/transaction/:hash", get(get_transaction_by_hash))
+        .route("/account/:address/balance", get(get_account_balance))
+        .route("/account/:address/nonce", get(get_account_nonce))
         .route("/mempool", get(get_mempool))
         .route("/peers", get(get_peers))
+        .route("/peers/count", get(get_peers_count))
+        .route("/peers/list", get(get_peers))
         .route("/network", get(get_network))
         .route("/supply", get(get_supply))
+        .route("/supply/circulating", get(get_supply_circulating))
+        .route("/supply/total", get(get_supply_total))
         .route("/difficulty", get(get_difficulty))
+        .route("/difficulty/latest", get(get_difficulty))
+        .route("/validators", get(get_validators))
+        .route("/validator/reward-address", get(get_validator_reward_address))
+        .route("/treasury", get(get_treasury))
+        .route("/treasury/reward-address", get(get_treasury_reward_address))
         .route("/metrics", get(get_metrics))
         .route("/peer", post(post_peer))
         .route("/snapshot", post(post_snapshot))

@@ -233,17 +233,7 @@ fn test_automatic_ledger_recovery_on_startup() {
         allocations: std::collections::HashMap::new(),
     };
     
-    // Copy genesis config template to temporary file just in case load_genesis_config expects config directory
-    std::fs::create_dir_all("config").unwrap();
-    std::fs::write("config/genesis.sumatera.toml", "
-[genesis]
-version = 1
-timestamp = 1625097600
-difficulty = 1
-chain_id = 1
 
-[allocations]
-").unwrap();
 
     let storage_recovered = aruna_node::bootstrap::initialize_database(test_port, &config).unwrap();
 
