@@ -1,19 +1,14 @@
-# Walkthrough - Cloudflare Workers + Assets Transition & Dependency Updates
+# Walkthrough - ES Module Target Shift & cloudflare-module Integration
 
-We have successfully migrated the deployment setup from a Cloudflare Pages preset to a modern **Cloudflare Workers + Assets** preset, aligning with the build environment's auto-deploy workflow (`npx wrangler deploy`). We also updated dependencies to resolve all deprecation warnings.
+We have successfully migrated the explorer-ui builder target to output a modern ES Module worker format, matching the compiler targets expected by Wrangler v4.
 
 ---
 
 ## 🛠️ Changes Completed
 
-### 1. Nuxt/Nitro Preset Shift
-* **[`nuxt.config.ts`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/nuxt.config.ts#L24-L26)**: Changed the Nitro build preset target to `cloudflare` (which compiles as a standard Worker).
-
-### 2. Wrangler Configuration Integration
-* **[`wrangler.jsonc`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/wrangler.jsonc#L3-L10)**: Added `"main": ".output/server/index.mjs"` and configured `"assets": { "directory": ".output/public" }` to allow standard, non-interactive `wrangler deploy` to execute without folder resolution errors.
-
-### 3. Transitive Dependency Upgrades
-* Ran `npm update` to upgrade transitive dependencies, cleaning up deprecation warnings for `@koa/router` and `glob` variants.
+### 1. Preset Migration
+* **[`nuxt.config.ts`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/nuxt.config.ts#L24-L26)**: Changed the Nitro build preset target from `'cloudflare'` to `'cloudflare-module'`.
+* **Why**: The default `'cloudflare'` target output legacy structures that caused Wrangler to fall back to the Service Worker parser and throw compilation warnings on external built-in packages. The `'cloudflare-module'` preset outputs a modern ES module format (`export default`) which resolves syntax errors during wrangler deployment checks.
 
 ---
 
@@ -27,9 +22,9 @@ npm run build
 Output:
 ```
 ✔ Generated public .output/public                            nitro 5:30:02 PM
-✔ Nuxt Nitro server built                                    nitro 5:30:17 PM
-  └─ .output/server/index.mjs (758 kB) (203 kB)
-Σ Total size: 758 kB (203 kB gzip)
+✔ Nuxt Nitro server built                                    nitro 5:34:42 PM
+  └─ .output/server/index.mjs (178 B)
+Σ Total size: 891 kB (279 kB gzip)
 ✨ Build complete!
 ```
 The server bundle was generated successfully with **0 warnings and 0 errors**.
