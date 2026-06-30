@@ -1,6 +1,6 @@
 name = "aruna-rpc-gateway"
 main = "src/index.js"
-compatibility_date = "2024-03-01"
+compatibility_date = "2024-09-23"
 
 [vars]
 # Internal Node RPC URL accessible via Cloudflare Tunnel
