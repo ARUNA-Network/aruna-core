@@ -22,6 +22,6 @@ export default defineNuxtConfig({
   },
   css: ['~/styles/main.css'],
   nitro: {
-    preset: 'cloudflare-module'
+    preset: 'cloudflare-pages'
   }
 })
