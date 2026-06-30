@@ -6,8 +6,7 @@
     "enabled": true
   },
   "assets": {
-    "directory": ".output/public",
-    "binding": "ASSETS"
+    "directory": ".output/public"
   },
   "compatibility_flags": [
     "nodejs_compat"
