@@ -1,23 +1,19 @@
-# Walkthrough - Explorer API Environment Variable Alignment
+# Walkthrough - Explorer API Router Prefix Compatibility
 
-We have realigned the environment variable handling in the Explorer API worker to follow Cloudflare best practices. Local development variables are placed in `.dev.vars` while wrangler no longer overwrites production environment variables in the Cloudflare Dashboard.
+We have added support for both the `/explorer/v1/` and `/api/v1/` route prefixes in the Cloudflare Worker router. This enables the frontend explorer-ui calling `/explorer/v1/status` to match the routes in the worker and respond correctly.
 
 ---
 
 ## 🛠️ Changes Completed
 
-### 1. wrangler.toml Update
-* **[`wrangler.toml`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/wrangler.toml)**: Removed the `[vars]` block completely to prevent it from overwriting production variables defined in the Cloudflare Dashboard during `wrangler deploy`.
+### 1. Main Entrypoint Router Update
+* **[`index.ts`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/src/index.ts#L48-L76)**:
+  * Expanded route distribution condition checks (`isStatus`, `isBlocks`, `isTransaction`, `isAddress`, `isSearch`, `isNetwork`) to support both `/api/v1` and `/explorer/v1` path prefixes.
 
-### 2. .dev.vars Integration
-* **[`.dev.vars`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/.dev.vars)**: Created local development environment file containing `DATABASE_URL` and `RPC_BASE_URL` (resolving to `http://localhost:8080` locally).
-* **[`.gitignore`](file:///home/coleallstar/Public/crypto-project/.gitignore#L31-L32)**: Added `.dev.vars` to ignore local dev secrets.
-
-### 3. Worker Code Alignment
-* **[`index.ts`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/src/index.ts#L11-L47)**:
-  * Updated the `Env` interface to support optional `RPC_BASE_URL` (configured in dashboard) and `NODE_RPC_URL`.
-  * Sanitized and prioritized `RPC_BASE_URL` dynamically: `const rpcUrl = env.RPC_BASE_URL || env.NODE_RPC_URL || 'http://localhost:8080'`.
-  * Passed the dynamic `rpcUrl` configuration parameter to status and network subroute handlers.
+### 2. Route Handlers Update
+* **[`blocks.ts`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/src/routes/blocks.ts#L7-L85)**: Added matches for `/explorer/v1/blocks`, `/explorer/v1/block/latest`, and regex support `/(?:api|explorer)/v1/block/` for height and hash endpoints.
+* **[`addresses.ts`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/src/routes/addresses.ts#L7-L7)**: Replaced path matching regex with `/(?:api|explorer)/v1/address/`.
+* **[`transactions.ts`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/src/routes/transactions.ts#L7-L7)**: Replaced path matching regex with `/(?:api|explorer)/v1/transaction/`.
 
 ---
 
@@ -30,7 +26,7 @@ npx wrangler deploy --dry-run
 ```
 Output:
 ```
-Total Upload: 292.37 KiB / gzip: 56.56 KiB
+Total Upload: 293.12 KiB / gzip: 56.67 KiB
 No bindings found.
 --dry-run: exiting now.
 ```

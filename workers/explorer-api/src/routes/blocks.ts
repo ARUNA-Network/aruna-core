@@ -5,7 +5,7 @@ export async function handleBlocks(request: Request, pool: Pool): Promise<Respon
   const url = new URL(request.url);
 
   // 1. Paginated blocks list
-  if (url.pathname === '/api/v1/blocks') {
+  if (url.pathname === '/api/v1/blocks' || url.pathname === '/explorer/v1/blocks') {
     const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '20', 10), 1), 100);
     const offset = Math.max(parseInt(url.searchParams.get('offset') || '0', 10), 0);
 
@@ -31,7 +31,7 @@ export async function handleBlocks(request: Request, pool: Pool): Promise<Respon
   }
 
   // 2. Latest block
-  if (url.pathname === '/api/v1/block/latest') {
+  if (url.pathname === '/api/v1/block/latest' || url.pathname === '/explorer/v1/block/latest') {
     try {
       const block = await getLatestBlock(pool);
       if (!block) {
@@ -53,7 +53,7 @@ export async function handleBlocks(request: Request, pool: Pool): Promise<Respon
   }
 
   // 3. Block by height
-  const heightMatch = url.pathname.match(/^\/api\/v1\/block\/(\d+)$/);
+  const heightMatch = url.pathname.match(/^\/(?:api|explorer)\/v1\/block\/(\d+)$/);
   if (heightMatch) {
     const height = parseInt(heightMatch[1], 10);
     try {
@@ -77,7 +77,7 @@ export async function handleBlocks(request: Request, pool: Pool): Promise<Respon
   }
 
   // 4. Block by hash
-  const hashMatch = url.pathname.match(/^\/api\/v1\/block\/hash\/([a-fA-F0-9]+)$/);
+  const hashMatch = url.pathname.match(/^\/(?:api|explorer)\/v1\/block\/hash\/([a-fA-F0-9]+)$/);
   if (hashMatch) {
     const hash = hashMatch[1];
     try {

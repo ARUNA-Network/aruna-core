@@ -4,7 +4,7 @@ import { getAccount } from '../services/rpc';
 export async function handleAddresses(request: Request, pool: Pool): Promise<Response> {
   const url = new URL(request.url);
 
-  const addrMatch = url.pathname.match(/^\/api\/v1\/address\/([a-zA-Z0-9]+)$/);
+  const addrMatch = url.pathname.match(/^\/(?:api|explorer)\/v1\/address\/([a-zA-Z0-9]+)$/);
   if (!addrMatch) {
     return new Response(JSON.stringify({ error: 'Route not found' }), {
       status: 404,

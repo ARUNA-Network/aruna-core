@@ -4,7 +4,7 @@ import { getTransaction } from '../services/rpc';
 export async function handleTransactions(request: Request, pool: Pool): Promise<Response> {
   const url = new URL(request.url);
 
-  const hashMatch = url.pathname.match(/^\/api\/v1\/transaction\/([a-fA-F0-9]+)$/);
+  const hashMatch = url.pathname.match(/^\/(?:api|explorer)\/v1\/transaction\/([a-fA-F0-9]+)$/);
   if (!hashMatch) {
     return new Response(JSON.stringify({ error: 'Route not found' }), {
       status: 404,

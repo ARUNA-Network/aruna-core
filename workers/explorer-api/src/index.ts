@@ -49,22 +49,30 @@ export default {
     let response: Response;
 
     // 4. Route Distribution
-    if (url.pathname === '/api/v1/stats' || url.pathname === '/api/v1/status') {
+    const isStatus = url.pathname === '/api/v1/stats' || url.pathname === '/api/v1/status' ||
+                     url.pathname === '/explorer/v1/stats' || url.pathname === '/explorer/v1/status';
+    
+    const isBlocks = url.pathname === '/api/v1/blocks' || url.pathname === '/explorer/v1/blocks' ||
+                     url.pathname === '/api/v1/block/latest' || url.pathname === '/explorer/v1/block/latest' ||
+                     /^\/(?:api|explorer)\/v1\/block\/\d+$/.test(url.pathname) ||
+                     url.pathname.startsWith('/api/v1/block/hash/') || url.pathname.startsWith('/explorer/v1/block/hash/');
+                     
+    const isTransaction = url.pathname.startsWith('/api/v1/transaction/') || url.pathname.startsWith('/explorer/v1/transaction/');
+    const isAddress = url.pathname.startsWith('/api/v1/address/') || url.pathname.startsWith('/explorer/v1/address/');
+    const isSearch = url.pathname === '/api/v1/search' || url.pathname === '/explorer/v1/search';
+    const isNetwork = url.pathname === '/api/v1/network' || url.pathname === '/explorer/v1/network';
+
+    if (isStatus) {
       response = await handleStatus(request, pool, { NODE_RPC_URL: rpcUrl });
-    } else if (
-      url.pathname === '/api/v1/blocks' ||
-      url.pathname === '/api/v1/block/latest' ||
-      /^\/api\/v1\/block\/\d+$/.test(url.pathname) ||
-      url.pathname.startsWith('/api/v1/block/hash/')
-    ) {
+    } else if (isBlocks) {
       response = await handleBlocks(request, pool);
-    } else if (url.pathname.startsWith('/api/v1/transaction/')) {
+    } else if (isTransaction) {
       response = await handleTransactions(request, pool);
-    } else if (url.pathname.startsWith('/api/v1/address/')) {
+    } else if (isAddress) {
       response = await handleAddresses(request, pool);
-    } else if (url.pathname === '/api/v1/search') {
+    } else if (isSearch) {
       response = await handleSearch(request, pool);
-    } else if (url.pathname === '/api/v1/network') {
+    } else if (isNetwork) {
       try {
         const [peers, validators] = await Promise.all([
           fetchNodeRpc(rpcUrl, '/peers').catch(() => ({ peers: [] })),
