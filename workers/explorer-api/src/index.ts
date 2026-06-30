@@ -10,7 +10,8 @@ import { handleSearch } from './routes/search';
 
 interface Env {
   DATABASE_URL: string;
-  NODE_RPC_URL: string;
+  RPC_BASE_URL?: string;
+  NODE_RPC_URL?: string;
 }
 
 export default {
@@ -42,11 +43,14 @@ export default {
       return applyCors(errRes);
     }
 
+    // Resolve RPC Base URL dynamically (prioritize RPC_BASE_URL from Cloudflare dashboard)
+    const rpcUrl = env.RPC_BASE_URL || env.NODE_RPC_URL || 'http://localhost:8080';
+
     let response: Response;
 
     // 4. Route Distribution
     if (url.pathname === '/api/v1/stats' || url.pathname === '/api/v1/status') {
-      response = await handleStatus(request, pool, env);
+      response = await handleStatus(request, pool, { NODE_RPC_URL: rpcUrl });
     } else if (
       url.pathname === '/api/v1/blocks' ||
       url.pathname === '/api/v1/block/latest' ||
@@ -63,8 +67,8 @@ export default {
     } else if (url.pathname === '/api/v1/network') {
       try {
         const [peers, validators] = await Promise.all([
-          fetchNodeRpc(env.NODE_RPC_URL, '/peers').catch(() => ({ peers: [] })),
-          fetchNodeRpc(env.NODE_RPC_URL, '/validators').catch(() => ({ active_validators_count: 1, reward_address: "" })),
+          fetchNodeRpc(rpcUrl, '/peers').catch(() => ({ peers: [] })),
+          fetchNodeRpc(rpcUrl, '/validators').catch(() => ({ active_validators_count: 1, reward_address: "" })),
         ]);
         response = new Response(JSON.stringify({
           status: 'healthy',

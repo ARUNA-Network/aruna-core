@@ -1,19 +1,23 @@
-# Walkthrough - Dynamic API Base URL Config
+# Walkthrough - Explorer API Environment Variable Alignment
 
-We have configured the API client base URL resolver to prioritize the secret variable `API_BASE_URL` (or fallback `NUXT_PUBLIC_API_BASE`), completely removing hardcoded fallback URL properties.
+We have realigned the environment variable handling in the Explorer API worker to follow Cloudflare best practices. Local development variables are placed in `.dev.vars` while wrangler no longer overwrites production environment variables in the Cloudflare Dashboard.
 
 ---
 
 ## 🛠️ Changes Completed
 
-### 1. nuxt.config.ts Update
-* **[`nuxt.config.ts`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/nuxt.config.ts#L18-L18)**: Defined public runtime configuration `apiBase` to prioritize:
-  1. `process.env.API_BASE_URL`
-  2. `process.env.NUXT_PUBLIC_API_BASE`
-  3. Default fallback value: `'https://api.jojowi.web.id/api/v1'`
+### 1. wrangler.toml Update
+* **[`wrangler.toml`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/wrangler.toml)**: Removed the `[vars]` block completely to prevent it from overwriting production variables defined in the Cloudflare Dashboard during `wrangler deploy`.
 
-### 2. api.ts Update
-* **[`api.ts`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/services/api.ts#L4-L11)**: Replaced the hardcoded URL fallback inside the `catch` block of `getApiBase()` to resolve dynamically to `process.env.API_BASE_URL` or `process.env.NUXT_PUBLIC_API_BASE` in non-Nuxt runtime contexts, defaulting cleanly to `''`.
+### 2. .dev.vars Integration
+* **[`.dev.vars`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/.dev.vars)**: Created local development environment file containing `DATABASE_URL` and `RPC_BASE_URL` (resolving to `http://localhost:8080` locally).
+* **[`.gitignore`](file:///home/coleallstar/Public/crypto-project/.gitignore#L31-L32)**: Added `.dev.vars` to ignore local dev secrets.
+
+### 3. Worker Code Alignment
+* **[`index.ts`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/src/index.ts#L11-L47)**:
+  * Updated the `Env` interface to support optional `RPC_BASE_URL` (configured in dashboard) and `NODE_RPC_URL`.
+  * Sanitized and prioritized `RPC_BASE_URL` dynamically: `const rpcUrl = env.RPC_BASE_URL || env.NODE_RPC_URL || 'http://localhost:8080'`.
+  * Passed the dynamic `rpcUrl` configuration parameter to status and network subroute handlers.
 
 ---
 
@@ -22,14 +26,12 @@ We have configured the API client base URL resolver to prioritize the secret var
 ### Build Verification
 We verified build compilation:
 ```bash
-npm run build
+npx wrangler deploy --dry-run
 ```
 Output:
 ```
-✔ Generated public dist                                      nitro 7:19:39 PM
-✔ Nuxt Nitro server built                                    nitro 7:19:54 PM
-  └─ dist/_worker.js/index.js (251 B) (187 B)
-Σ Total size: 803 kB (253 kB gzip)
-✨ Build complete!
+Total Upload: 292.37 KiB / gzip: 56.56 KiB
+No bindings found.
+--dry-run: exiting now.
 ```
-The server bundle was generated successfully with **0 warnings and 0 errors**.
+The worker bundles build successfully with **0 warnings and 0 errors**.
