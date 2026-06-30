@@ -1,6 +1,0 @@
-name = "aruna-explorer"
-main = "worker.ts"
-compatibility_date = "2026-06-29"
-
-[assets]
-directory = "./dist"
