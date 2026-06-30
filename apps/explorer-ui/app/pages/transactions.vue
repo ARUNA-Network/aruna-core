@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useAsyncData, useSeoMeta } from '#app'
 import { useBlockStore } from '~/stores/block'
 import SearchBar from '~/components/SearchBar.vue'
 import LatestTransactions from '~/components/LatestTransactions.vue'
@@ -12,8 +12,16 @@ import CardContent from '~/components/ui/card/CardContent.vue'
 const blockStore = useBlockStore()
 const { latestBlock, loading, latestTxsError: errorMsg } = storeToRefs(blockStore)
 
-onMounted(() => {
-  blockStore.fetchLatestBlock()
+// Server side data prefetch for SSR SEO bots
+await useAsyncData('latest-block-txs', async () => {
+  await blockStore.fetchLatestBlock()
+  return true
+})
+
+useSeoMeta({
+  title: 'Transactions | ARUNA Network Explorer',
+  ogTitle: 'Transactions | ARUNA Network Explorer',
+  description: 'Search and browse confirmed transactions, values, fees, gas limits, and signature parameters on the ARUNA Network.'
 })
 </script>
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
-import { useRoute } from '#app'
+import { watch } from 'vue'
+import { useRoute, useAsyncData, useSeoMeta } from '#app'
 import { storeToRefs } from 'pinia'
 import { useBlockStore } from '~/stores/block'
 import { numFmt, shortHash, microAruToAru } from '~/utils/format'
@@ -15,17 +15,22 @@ const route = useRoute()
 const blockStore = useBlockStore()
 const { currentBlock: block, loading, error: errorMsg } = storeToRefs(blockStore)
 
-async function loadBlock() {
-  const height = route.params.height as string
-  await blockStore.fetchBlockDetails(height)
-}
+const height = route.params.height as string
 
-watch(() => route.params.height, () => {
-  loadBlock()
+// Fetch initial data on the server during SSR, bound to the block height parameter
+await useAsyncData(['block-details', height], async () => {
+  await blockStore.fetchBlockDetails(height)
+  return true
 })
 
-onMounted(() => {
-  loadBlock()
+useSeoMeta({
+  title: () => `Block #${block.value?.height || height} | ARUNA Network Explorer`,
+  ogTitle: () => `Block #${block.value?.height || height} | ARUNA Network Explorer`,
+  description: () => `View details, transactions lists, and consensus parameters for block #${block.value?.height || height} on the ARUNA Network.`
+})
+
+watch(() => route.params.height, async (newHeight) => {
+  await blockStore.fetchBlockDetails(newHeight as string)
 })
 </script>
 

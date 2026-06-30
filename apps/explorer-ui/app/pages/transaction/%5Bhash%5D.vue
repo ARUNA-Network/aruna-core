@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
-import { useRoute } from '#app'
+import { watch } from 'vue'
+import { useRoute, useAsyncData, useSeoMeta } from '#app'
 import { storeToRefs } from 'pinia'
 import { useTxStore } from '~/stores/tx'
 import { shortHash } from '~/utils/format'
@@ -10,17 +10,22 @@ const route = useRoute()
 const txStore = useTxStore()
 const { currentTx: tx, loading, error: errorMsg } = storeToRefs(txStore)
 
-async function loadTx() {
-  const hash = route.params.hash as string
-  await txStore.fetchTransactionDetails(hash)
-}
+const hash = route.params.hash as string
 
-watch(() => route.params.hash, () => {
-  loadTx()
+// Fetch initial data on the server during SSR, bound to the transaction hash parameter
+await useAsyncData(['tx-details', hash], async () => {
+  await txStore.fetchTransactionDetails(hash)
+  return true
 })
 
-onMounted(() => {
-  loadTx()
+useSeoMeta({
+  title: () => `Tx ${tx.value ? shortHash(tx.value.hash) : shortHash(hash)} | ARUNA Network Explorer`,
+  ogTitle: () => `Tx ${tx.value ? shortHash(tx.value.hash) : shortHash(hash)} | ARUNA Network Explorer`,
+  description: () => `Details, fee, gas, and payload metrics for transaction ${hash} on the ARUNA Network.`
+})
+
+watch(() => route.params.hash, async (newHash) => {
+  await txStore.fetchTransactionDetails(newHash as string)
 })
 </script>
 

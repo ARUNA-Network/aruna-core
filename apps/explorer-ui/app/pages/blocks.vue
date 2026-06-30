@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
-import { useRoute, useRouter } from '#app'
+import { ref, watch } from 'vue'
+import { useRoute, useRouter, useAsyncData, useSeoMeta } from '#app'
 import { storeToRefs } from 'pinia'
 import { useBlockStore } from '~/stores/block'
 
@@ -16,18 +16,23 @@ const route = useRoute()
 const router = useRouter()
 const currentPage = ref(Number(route.query.page) || 1)
 
-async function fetchBlocks() {
+// Fetch initial data on the server during SSR, bound to the current page number
+await useAsyncData(['blocks-list', currentPage.value], async () => {
   const offset = (currentPage.value - 1) * limit
   await blockStore.fetchBlocksPage(limit, offset)
-}
-
-watch(() => route.query.page, (newPage) => {
-  currentPage.value = Number(newPage) || 1
-  fetchBlocks()
+  return true
 })
 
-onMounted(() => {
-  fetchBlocks()
+useSeoMeta({
+  title: () => `Blocks (Page ${currentPage.value}) | ARUNA Network Explorer`,
+  ogTitle: () => `Blocks (Page ${currentPage.value}) | ARUNA Network Explorer`,
+  description: 'Browse recent blocks, timestamps, difficulty values, and transaction counts on the ARUNA payment chain.'
+})
+
+watch(() => route.query.page, async (newPage) => {
+  currentPage.value = Number(newPage) || 1
+  const offset = (currentPage.value - 1) * limit
+  await blockStore.fetchBlocksPage(limit, offset)
 })
 
 function navigateToPage(page: number) {

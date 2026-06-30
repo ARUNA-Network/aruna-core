@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useAsyncData, useSeoMeta } from '#app'
 import { useNetworkStore } from '~/stores/network'
 import { useBlockStore } from '~/stores/block'
 import SearchBar from '~/components/SearchBar.vue'
@@ -19,19 +20,33 @@ const blockStore = useBlockStore()
 const { stats } = storeToRefs(networkStore)
 const { latestBlock, blocksPage: recentBlocks, loading } = storeToRefs(blockStore)
 
-let timer: NodeJS.Timeout | null = null
-
-async function loadData() {
+// Server-side prefetch for SSR SEO bots
+await useAsyncData('home-stats', async () => {
   await Promise.all([
     networkStore.fetchNetworkData(),
     blockStore.fetchLatestBlock(),
     blockStore.fetchBlocksPage(10, 0)
   ])
-}
+  return true
+})
+
+useSeoMeta({
+  title: 'ARUNA Network Block Explorer',
+  ogTitle: 'ARUNA Network Block Explorer',
+  description: 'Real-time blockchain explorer and network diagnostics dashboard for the ARUNA Network, Dari Rakyat, Oleh Rakyat, Untuk Rakyat.',
+  ogDescription: 'Real-time blockchain explorer and network diagnostics dashboard for the ARUNA Network, Dari Rakyat, Oleh Rakyat, Untuk Rakyat.'
+})
+
+let timer: NodeJS.Timeout | null = null
 
 onMounted(() => {
-  loadData()
-  timer = setInterval(loadData, 12000)
+  timer = setInterval(async () => {
+    await Promise.all([
+      networkStore.fetchNetworkData(),
+      blockStore.fetchLatestBlock(),
+      blockStore.fetchBlocksPage(10, 0)
+    ])
+  }, 12000)
 })
 
 onUnmounted(() => {

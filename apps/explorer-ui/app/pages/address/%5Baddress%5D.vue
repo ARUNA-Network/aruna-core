@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
-import { useRoute } from '#app'
+import { watch } from 'vue'
+import { useRoute, useAsyncData, useSeoMeta } from '#app'
 import { storeToRefs } from 'pinia'
 import { useTxStore } from '~/stores/tx'
-import { shortHash, microAruToAru } from '~/utils/format'
+import { numFmt, shortHash, microAruToAru } from '~/utils/format'
 import AddressCard from '~/components/AddressCard.vue'
 import Badge from '~/components/ui/badge/Badge.vue'
 import Card from '~/components/ui/card/Card.vue'
@@ -15,17 +15,22 @@ const route = useRoute()
 const txStore = useTxStore()
 const { addressDetails, loading, addressError: errorMsg } = storeToRefs(txStore)
 
-async function loadAddress() {
-  const address = route.params.address as string
-  await txStore.fetchAddressDetails(address, 20, 0)
-}
+const address = route.params.address as string
 
-watch(() => route.params.address, () => {
-  loadAddress()
+// Fetch initial data on the server during SSR, bound to the address parameter
+await useAsyncData(['address-details', address], async () => {
+  await txStore.fetchAddressDetails(address, 20, 0)
+  return true
 })
 
-onMounted(() => {
-  loadAddress()
+useSeoMeta({
+  title: () => `Address ${shortHash(address)} | ARUNA Network Explorer`,
+  ogTitle: () => `Address ${shortHash(address)} | ARUNA Network Explorer`,
+  description: () => `View address parameters, balance, nonce, and transaction logs for address ${address} on the ARUNA Network.`
+})
+
+watch(() => route.params.address, async (newAddress) => {
+  await txStore.fetchAddressDetails(newAddress as string, 20, 0)
 })
 </script>
 

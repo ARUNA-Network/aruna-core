@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useAsyncData, useSeoMeta } from '#app'
 import { useNetworkStore } from '~/stores/network'
 import { numFmt } from '~/utils/format'
 
@@ -23,8 +24,16 @@ const { stats, network, loading, error: errorMsg } = storeToRefs(networkStore)
 
 const activeTab = ref<'status' | 'peers'>('status')
 
-onMounted(() => {
-  networkStore.fetchNetworkData()
+// Fetch initial data on the server during SSR
+await useAsyncData('network-diagnostics', async () => {
+  await networkStore.fetchNetworkData()
+  return true
+})
+
+useSeoMeta({
+  title: 'Network Diagnostics | ARUNA Network Explorer',
+  ogTitle: 'Network Diagnostics | ARUNA Network Explorer',
+  description: 'View connected P2P peers, network configuration, and consensus diagnostics of the ARUNA Network.'
 })
 </script>
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useAsyncData, useSeoMeta } from '#app'
 import { useNetworkStore } from '~/stores/network'
 
 // UI Primitives
@@ -19,8 +19,16 @@ import TableCell from '~/components/ui/table/TableCell.vue'
 const networkStore = useNetworkStore()
 const { network, loading, error: errorMsg } = storeToRefs(networkStore)
 
-onMounted(() => {
-  networkStore.fetchNetworkData()
+// Fetch initial data on the server during SSR
+await useAsyncData('active-validators', async () => {
+  await networkStore.fetchNetworkData()
+  return true
+})
+
+useSeoMeta({
+  title: 'Active Validators | ARUNA Network Explorer',
+  ogTitle: 'Active Validators | ARUNA Network Explorer',
+  description: 'View the active validators, reward addresses, and consensus stake weights on the ARUNA Network.'
 })
 </script>
 

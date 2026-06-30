@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useAsyncData, useSeoMeta } from '#app'
 import { useNetworkStore } from '~/stores/network'
 import { numFmt } from '~/utils/format'
 
@@ -21,8 +21,16 @@ function circulatingSupply(height: number) {
   return premine + (height * blockReward)
 }
 
-onMounted(() => {
-  networkStore.fetchNetworkData()
+// Fetch initial data on the server during SSR
+await useAsyncData('network-stats', async () => {
+  await networkStore.fetchNetworkData()
+  return true
+})
+
+useSeoMeta({
+  title: 'Economics & Supply | ARUNA Network Explorer',
+  ogTitle: 'Economics & Supply | ARUNA Network Explorer',
+  description: 'View circulating supply details, premine allocations, halving schedules, and block reward split metrics of the ARUNA token.'
 })
 </script>
 

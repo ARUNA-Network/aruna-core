@@ -1,55 +1,42 @@
-# Walkthrough - Routing & Component Restructuring for explorer-ui
+# Walkthrough - SSR & SEO Optimization for explorer-ui
 
-We have successfully restructured the routes and modularized the components of `apps/explorer-ui` to match your final routing specification and component-driven architecture.
+We have successfully optimized the Aruna Block Explorer UI for fully SEO-friendly Server-Side Rendering (SSR).
 
 ---
 
 ## 🛠️ Changes Completed
 
-### 1. Final Routing Matrix Integration
-We aligned page folders to support the exact routing schema:
-* **`/`** (`app/pages/index.vue`): Core landing page.
-* **`/blocks`** (`app/pages/blocks.vue`): Renders the paginated blocks table.
-* **`/block/[height]`** (`app/pages/block/[height].vue`): Replaced old `[id].vue` to fetch and render block metrics by height or hash.
-* **`/block/hash/[hash]`** (`app/pages/block/hash/[hash].vue`): Preserved alias redirection to `/block/:hash`.
-* **`/transactions`** (`app/pages/transactions.vue`): Transaction search portal.
-* **`/transaction/[hash]`** (`app/pages/transaction/[hash].vue`): Transaction details lookup.
-* **`/address/[address]`** (`app/pages/address/[address].vue`): Account details and transactions history.
-* **`/validators`** (`app/pages/validators.vue`): Active validator nodes list.
-* **`/network`** (`app/pages/network.vue`): Diagnostics metrics and peers overview.
-* **`/stats`** (`app/pages/stats.vue`): Circulating supply & block reward allocation model details.
-* **`/search`** (`app/pages/search.vue`): Global search results page.
+### 1. Server-Side Data Fetching (`useAsyncData`)
+We converted client-only data fetches into server-executed calls during SSR:
+* **Home Page** (`index.vue`): Prefetches status metrics, latest blocks, and recent blocks lists on the server.
+* **Blocks Page** (`blocks.vue`): Prefetches blocks based on the reactive pagination `currentPage` index parameter.
+* **Block Details Page** (`[height].vue`): Prefetches block metrics by block height parameter.
+* **Transactions Portal** (`transactions.vue`): Prefetches current block transactions list.
+* **Transaction Details Page** (`[hash].vue`): Prefetches transaction metrics by hash.
+* **Address Page** (`[address].vue`): Prefetches balance and log history by address.
+* **Network & Validators & Stats** (`network.vue`, `validators.vue`, `stats.vue`): Prefetch system configurations and weights.
 
-### 2. Component Driven Restructuring (`app/components/`)
-We broke monolithic view templates down into isolated, reusable blocks:
-* **[`BlockCard.vue`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/components/BlockCard.vue)**: Renders details for a single Block.
-* **[`TransactionCard.vue`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/components/TransactionCard.vue)**: Renders details for a single Transaction.
-* **[`AddressCard.vue`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/components/AddressCard.vue)**: Renders balance and nonce parameters for an Address.
-* **[`NetworkCard.vue`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/components/NetworkCard.vue)**: Renders dynamic status summary grid cards.
-* **[`LatestBlocks.vue`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/components/LatestBlocks.vue)**: Shows a list of recent blocks.
-* **[`LatestTransactions.vue`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/components/LatestTransactions.vue)**: Shows a list of recent transactions.
-* **[`SearchBar.vue`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/components/SearchBar.vue)**: Global search bar classifier.
-* **[`Sidebar.vue`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/components/Sidebar.vue)**: Floating dashboard navigation sidebar.
-* **[`Navbar.vue`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/components/Navbar.vue)**: Top breadcrumbs navbar.
-* **[`Header.vue`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/components/Header.vue)**: Navbar wrapper context.
-* **[`Footer.vue`](file:///home/coleallstar/Public/crypto-project/apps/explorer-ui/app/components/Footer.vue)**: Footer component.
+### 2. SEO Meta Headers (`useSeoMeta`)
+We configured semantic HTML meta headers for every route:
+* Mapped dynamic page title strings (e.g. `Block #2,450 | ARUNA Explorer`).
+* Set ogTitles, descriptions, and viewport properties.
 
 ---
 
 ## 🔬 Verification Results
 
 ### Build Verification
-We successfully ran compilation checks within `apps/explorer-ui`:
+We verified build compilation:
 ```bash
 npm run build
 ```
 Output:
 ```
-✔ Server built in 3490ms
+✔ Server built in 3593ms
 ✔ Generated public dist
 ✔ Nuxt Nitro server built
   └─ dist/_worker.js/index.js (251 B) (187 B)
-Σ Total size: 780 kB (244 kB gzip)
+Σ Total size: 802 kB (252 kB gzip)
 ✨ Build complete!
 ```
 The server bundle was generated successfully with **0 warnings and 0 errors**.
