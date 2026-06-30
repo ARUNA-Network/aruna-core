@@ -19,6 +19,7 @@ import TableRow from '~/components/ui/table/TableRow.vue'
 import TableHead from '~/components/ui/table/TableHead.vue'
 import TableCell from '~/components/ui/table/TableCell.vue'
 
+const config = useRuntimeConfig()
 const networkStore = useNetworkStore()
 const { stats, network, loading, error: errorMsg } = storeToRefs(networkStore)
 
@@ -84,11 +85,11 @@ useSeoMeta({
             <div class="detail-container">
               <div class="detail-row">
                 <span class="detail-label">Network Name</span>
-                <span class="detail-value">{{ stats.node ? stats.node.network : 'Sumatera Testnet' }}</span>
+                <span class="detail-value">{{ stats.node ? stats.node.network : config.public.networkName }}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Chain ID</span>
-                <span class="detail-value">{{ stats.node ? stats.node.chain_id : '7777' }}</span>
+                <span class="detail-value">{{ stats.node ? stats.node.chain_id : config.public.chainId }}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Synchronization Status</span>

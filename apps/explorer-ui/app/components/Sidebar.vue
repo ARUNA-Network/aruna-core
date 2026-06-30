@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const config = useRuntimeConfig()
+
 defineProps<{
   isOpen: boolean
 }>()
@@ -34,7 +36,7 @@ const emit = defineEmits<{
       </NuxtLink>
 
       <div class="px-2">
-        <Badge variant="default" class="text-[10px] py-0.5 px-2">Sumatera Testnet</Badge>
+        <Badge variant="default" class="text-[10px] py-0.5 px-2">{{ config.public.networkName }}</Badge>
       </div>
 
       <!-- Navigation links -->
