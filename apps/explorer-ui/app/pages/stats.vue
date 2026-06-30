@@ -1,47 +1,40 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { getStatus } from '~/services/api'
+import { onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useNetworkStore } from '~/stores/network'
 import { numFmt } from '~/utils/format'
 
-const height = ref(0)
-const loading = ref(true)
-const errorMsg = ref('')
+// UI Primitives
+import Card from '~/components/ui/card/Card.vue'
+import CardHeader from '~/components/ui/card/CardHeader.vue'
+import CardTitle from '~/components/ui/card/CardTitle.vue'
+import CardContent from '~/components/ui/card/CardContent.vue'
+
+const networkStore = useNetworkStore()
+const { stats, loading, error: errorMsg } = storeToRefs(networkStore)
 
 const maxSupply = 1000000000
 const premine = 15000000
 const blockReward = 25
 
-async function fetchStats() {
-  loading.value = true
-  errorMsg.value = ''
-  try {
-    const data = await getStatus()
-    height.value = data.height
-  } catch (err) {
-    errorMsg.value = (err as Error).message || 'Failed to load stats.'
-  } finally {
-    loading.value = false
-  }
-}
-
-const circulatingSupply = () => {
-  return premine + (height.value * blockReward)
+function circulatingSupply(height: number) {
+  return premine + (height * blockReward)
 }
 
 onMounted(() => {
-  fetchStats()
+  networkStore.fetchNetworkData()
 })
 </script>
 
 <template>
   <main class="container page-spacing">
     <!-- Supply Overview -->
-    <section class="panel">
-      <div class="panel-header">
-        <h1 class="panel-title"><span class="panel-icon">💰</span> Circulating Supply</h1>
-      </div>
-      <div class="panel-body">
-        <div v-if="loading" class="skeleton-wrapper">
+    <Card>
+      <CardHeader>
+        <CardTitle><span class="panel-icon">💰</span> Circulating Supply</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div v-if="loading && !stats" class="skeleton-wrapper">
           <div class="skeleton-row"></div>
           <div class="skeleton-row"></div>
         </div>
@@ -50,7 +43,7 @@ onMounted(() => {
           <p>Failed to load supply statistics</p>
           <span class="error-msg">{{ errorMsg }}</span>
         </div>
-        <div v-else class="detail-container">
+        <div v-else-if="stats" class="detail-container">
           <div class="detail-row">
             <span class="detail-label">Max Token Cap Limit</span>
             <span class="detail-value text-glow">{{ numFmt(maxSupply) }} ARU</span>
@@ -73,18 +66,18 @@ onMounted(() => {
           </div>
           <div class="detail-row">
             <span class="detail-label">Current Circulating Supply</span>
-            <span class="detail-value text-glow font-bold">{{ numFmt(circulatingSupply()) }} ARU</span>
+            <span class="detail-value text-glow font-bold">{{ numFmt(circulatingSupply(stats.height)) }} ARU</span>
           </div>
         </div>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
 
     <!-- Block Reward Distribution Model -->
-    <section class="panel spacing-top">
-      <div class="panel-header">
-        <h2 class="panel-title"><span class="panel-icon">📊</span> Block Reward Distribution Model</h2>
-      </div>
-      <div class="panel-body">
+    <Card class="spacing-top">
+      <CardHeader>
+        <CardTitle><span class="panel-icon">📊</span> Block Reward Distribution Model</CardTitle>
+      </CardHeader>
+      <CardContent>
         <div class="detail-container">
           <div class="detail-row">
             <span class="detail-label">Proof of Work (PoW / Miners)</span>
@@ -99,8 +92,8 @@ onMounted(() => {
             <span class="detail-value">5% (1.25 ARU under governance contracts control)</span>
           </div>
         </div>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   </main>
 </template>
 

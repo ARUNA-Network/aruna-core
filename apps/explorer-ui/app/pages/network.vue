@@ -1,35 +1,30 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { getStatus, getNetwork } from '~/services/api'
+import { storeToRefs } from 'pinia'
+import { useNetworkStore } from '~/stores/network'
 import { numFmt } from '~/utils/format'
-import type { Stats, NetworkData } from '~/types'
 
-const stats = ref<Stats | null>(null)
-const network = ref<NetworkData | null>(null)
-const loading = ref(true)
-const errorMsg = ref('')
+// UI Primitives
+import Card from '~/components/ui/card/Card.vue'
+import CardHeader from '~/components/ui/card/CardHeader.vue'
+import CardTitle from '~/components/ui/card/CardTitle.vue'
+import CardContent from '~/components/ui/card/CardContent.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Badge from '~/components/ui/badge/Badge.vue'
+import Table from '~/components/ui/table/Table.vue'
+import TableHeader from '~/components/ui/table/TableHeader.vue'
+import TableBody from '~/components/ui/table/TableBody.vue'
+import TableRow from '~/components/ui/table/TableRow.vue'
+import TableHead from '~/components/ui/table/TableHead.vue'
+import TableCell from '~/components/ui/table/TableCell.vue'
+
+const networkStore = useNetworkStore()
+const { stats, network, loading, error: errorMsg } = storeToRefs(networkStore)
 
 const activeTab = ref<'status' | 'peers'>('status')
 
-async function loadNetworkData() {
-  loading.value = true
-  errorMsg.value = ''
-  try {
-    const [statsData, networkData] = await Promise.all([
-      getStatus(),
-      getNetwork()
-    ])
-    stats.value = statsData
-    network.value = networkData
-  } catch (err) {
-    errorMsg.value = (err as Error).message || 'Failed to load network status.'
-  } finally {
-    loading.value = false
-  }
-}
-
 onMounted(() => {
-  loadNetworkData()
+  networkStore.fetchNetworkData()
 })
 </script>
 
@@ -43,21 +38,23 @@ onMounted(() => {
 
     <!-- Tabs selector -->
     <div class="tabs-container">
-      <button
-        :class="['tab-btn', { active: activeTab === 'status' }]"
+      <Button
+        :variant="activeTab === 'status' ? 'default' : 'secondary'"
         @click="activeTab = 'status'"
+        size="sm"
       >
         🌐 Core Metrics
-      </button>
-      <button
-        :class="['tab-btn', { active: activeTab === 'peers' }]"
+      </Button>
+      <Button
+        :variant="activeTab === 'peers' ? 'default' : 'secondary'"
         @click="activeTab = 'peers'"
+        size="sm"
       >
         👥 Connected Peers ({{ network?.peers?.length || 0 }})
-      </button>
+      </Button>
     </div>
 
-    <div v-if="loading" class="skeleton-wrapper">
+    <div v-if="loading && !stats" class="skeleton-wrapper">
       <div class="skeleton-row"></div>
       <div class="skeleton-row"></div>
       <div class="skeleton-row"></div>
@@ -70,11 +67,11 @@ onMounted(() => {
     <div v-else>
       <!-- ── Tab 1: Core Metrics ── -->
       <div v-if="activeTab === 'status' && stats" class="network-status-grid animate-fade">
-        <section class="panel">
-          <div class="panel-header">
-            <h2 class="panel-title"><span class="panel-icon">🔧</span> System Configuration</h2>
-          </div>
-          <div class="panel-body">
+        <Card>
+          <CardHeader>
+            <CardTitle><span class="panel-icon">🔧</span> System Configuration</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div class="detail-container">
               <div class="detail-row">
                 <span class="detail-label">Network Name</span>
@@ -87,8 +84,8 @@ onMounted(() => {
               <div class="detail-row">
                 <span class="detail-label">Synchronization Status</span>
                 <span class="detail-value">
-                  <span v-if="stats.node?.synced" class="health-active">✓ Synced</span>
-                  <span v-else class="health-standalone">Standalone Node</span>
+                  <Badge v-if="stats.node?.synced" variant="success">✓ Synced</Badge>
+                  <Badge v-else variant="destructive">Standalone Node</Badge>
                 </span>
               </div>
               <div class="detail-row">
@@ -102,14 +99,14 @@ onMounted(() => {
                 <span class="detail-value">{{ stats.node ? stats.node.version : '0.1.0' }}</span>
               </div>
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        <section class="panel spacing-top-mobile">
-          <div class="panel-header">
-            <h2 class="panel-title"><span class="panel-icon">⛓</span> Consensus Height</h2>
-          </div>
-          <div class="panel-body">
+        <Card class="spacing-top-mobile">
+          <CardHeader>
+            <CardTitle><span class="panel-icon">⛓</span> Consensus Height</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div class="detail-container">
               <div class="detail-row">
                 <span class="detail-label">Best Block Height</span>
@@ -119,7 +116,7 @@ onMounted(() => {
               </div>
               <div class="detail-row">
                 <span class="detail-label">Best Block Hash</span>
-                <span class="detail-value mono">
+                <span class="detail-value mono text-xs leading-5">
                   <NuxtLink :to="`/block/${stats.best_hash}`">{{ stats.best_hash }}</NuxtLink>
                 </span>
               </div>
@@ -128,42 +125,42 @@ onMounted(() => {
                 <span class="detail-value">{{ numFmt(stats.total_tx_count) }}</span>
               </div>
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       </div>
 
       <!-- ── Tab 2: Connected Peers List ── -->
       <div v-if="activeTab === 'peers' && network" class="peers-list-wrapper animate-fade">
-        <section class="panel">
-          <div class="panel-header">
-            <h2 class="panel-title"><span class="panel-icon">👥</span> Peers List</h2>
-          </div>
-          <div class="panel-body">
+        <Card>
+          <CardHeader>
+            <CardTitle><span class="panel-icon">👥</span> Peers List</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div v-if="!network.peers || network.peers.length === 0" class="empty-state">
               No active peers connected. Nodes operate in standalone genesis mode.
             </div>
             <div v-else>
-              <table class="grid-table">
-                <thead>
-                  <tr>
-                    <th>Index</th>
-                    <th>Peer Address (P2P)</th>
-                    <th>Capabilities</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(peer, idx) in network.peers" :key="peer">
-                    <td class="mono">#{{ idx + 1 }}</td>
-                    <td class="mono">{{ peer }}</td>
-                    <td>Full Node</td>
-                    <td><span class="health-active">Active</span></td>
-                  </tr>
-                </tbody>
-              </table>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Index</TableHead>
+                    <TableHead>Peer Address (P2P)</TableHead>
+                    <TableHead>Capabilities</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow v-for="(peer, idx) in network.peers" :key="peer">
+                    <TableCell class="mono">#{{ idx + 1 }}</TableCell>
+                    <TableCell class="mono">{{ peer }}</TableCell>
+                    <TableCell>Full Node</TableCell>
+                    <TableCell><Badge variant="success">Active</Badge></TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       </div>
     </div>
   </main>
@@ -175,31 +172,7 @@ onMounted(() => {
   gap: var(--sp-md);
   margin-bottom: var(--sp-lg);
   border-bottom: 1px solid var(--border);
-  padding-bottom: var(--sp-sm);
-}
-
-.tab-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  padding: 8px 16px;
-  cursor: pointer;
-  border-radius: var(--r-sm);
-  transition: background var(--t-fast), color var(--t-fast);
-}
-
-.tab-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.tab-btn.active {
-  background: hsla(258, 80%, 65%, 0.15);
-  color: var(--brand-primary);
-  border: 1px solid hsla(258, 80%, 65%, 0.25);
+  padding-bottom: var(--sp-md);
 }
 
 .network-status-grid {
@@ -224,13 +197,5 @@ onMounted(() => {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-.health-standalone {
-  background: hsla(38, 100%, 55%, 0.15);
-  color: var(--warning);
-  border: 1px solid hsla(38, 100%, 55%, 0.3);
-  padding: 2px 8px;
-  border-radius: 4px;
 }
 </style>

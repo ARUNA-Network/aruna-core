@@ -1,27 +1,24 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { onMounted, watch } from 'vue'
 import { useRoute } from '#app'
-import { getTransaction } from '~/services/api'
+import { storeToRefs } from 'pinia'
+import { useTxStore } from '~/stores/tx'
 import { numFmt, shortHash, microAruToAru } from '~/utils/format'
-import type { Transaction } from '~/types'
+
+// UI Primitives
+import Card from '~/components/ui/card/Card.vue'
+import CardHeader from '~/components/ui/card/CardHeader.vue'
+import CardTitle from '~/components/ui/card/CardTitle.vue'
+import CardContent from '~/components/ui/card/CardContent.vue'
+import Badge from '~/components/ui/badge/Badge.vue'
 
 const route = useRoute()
-const tx = ref<Transaction | null>(null)
-const loading = ref(true)
-const errorMsg = ref('')
+const txStore = useTxStore()
+const { currentTx: tx, loading, error: errorMsg } = storeToRefs(txStore)
 
 async function loadTx() {
-  loading.value = true
-  errorMsg.value = ''
   const hash = route.params.hash as string
-  try {
-    const data = await getTransaction(hash)
-    tx.value = data
-  } catch (err) {
-    errorMsg.value = (err as Error).message || 'Failed to load transaction details.'
-  } finally {
-    loading.value = false
-  }
+  await txStore.fetchTransactionDetails(hash)
 }
 
 watch(() => route.params.hash, () => {
@@ -51,7 +48,7 @@ onMounted(() => {
       <p class="page-subtitle mono">{{ tx.hash }}</p>
     </div>
 
-    <div v-if="loading" class="skeleton-wrapper">
+    <div v-if="loading && !tx" class="skeleton-wrapper">
       <div class="skeleton-row"></div>
       <div class="skeleton-row"></div>
       <div class="skeleton-row"></div>
@@ -62,16 +59,16 @@ onMounted(() => {
       <span class="error-msg">{{ errorMsg }}</span>
     </div>
     <div v-else-if="tx" class="tx-details-panel">
-      <section class="panel">
-        <div class="panel-header">
-          <h2 class="panel-title"><span class="panel-icon">⚡</span> Transaction Metrics</h2>
-        </div>
-        <div class="panel-body">
+      <Card>
+        <CardHeader>
+          <CardTitle><span class="panel-icon">⚡</span> Transaction Metrics</CardTitle>
+        </CardHeader>
+        <CardContent>
           <div class="detail-container">
             <div class="detail-row">
               <span class="detail-label">Status</span>
               <span class="detail-value">
-                <span class="tag-confirmed">✓ Confirmed</span>
+                <Badge variant="success">✓ Confirmed</Badge>
               </span>
             </div>
             <div class="detail-row">
@@ -135,8 +132,8 @@ onMounted(() => {
               <span class="detail-value">{{ tx.has_data ? 'Yes' : 'No' }}</span>
             </div>
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
     </div>
   </main>
 </template>
@@ -146,14 +143,5 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-.tag-confirmed {
-  background: hsla(142, 72%, 48%, 0.15);
-  color: var(--success);
-  border: 1px solid hsla(142, 72%, 48%, 0.3);
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 600;
 }
 </style>

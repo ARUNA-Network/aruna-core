@@ -1,45 +1,33 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { getStatus, getLatestBlock, getBlocks } from '~/services/api'
+import { onMounted, onUnmounted } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useNetworkStore } from '~/stores/network'
+import { useBlockStore } from '~/stores/block'
 import { numFmt, timeAgo, timestamp, shortHash, microAruToAru } from '~/utils/format'
-import type { Stats, Block } from '~/types'
 import SearchBar from '~/components/common/SearchBar.vue'
 import DifficultyChart from '~/components/charts/DifficultyChart.vue'
 
-const stats = ref<Stats | null>(null)
-const latestBlock = ref<Block | null>(null)
-const recentBlocks = ref<Block[]>([])
-const loading = ref(true)
-const latestBlockError = ref('')
-const latestTxsError = ref('')
+// UI Primitives
+import Card from '~/components/ui/card/Card.vue'
+import CardHeader from '~/components/ui/card/CardHeader.vue'
+import CardTitle from '~/components/ui/card/CardTitle.vue'
+import CardContent from '~/components/ui/card/CardContent.vue'
+import Badge from '~/components/ui/badge/Badge.vue'
+
+const networkStore = useNetworkStore()
+const blockStore = useBlockStore()
+
+const { stats } = storeToRefs(networkStore)
+const { latestBlock, blocksPage: recentBlocks, latestBlockError, latestTxsError, loading } = storeToRefs(blockStore)
+
 let timer: NodeJS.Timeout | null = null
 
 async function loadData() {
-  try {
-    const statsData = await getStatus()
-    stats.value = statsData
-  } catch (err) {
-    console.warn('Failed to load status stats:', err)
-  }
-
-  try {
-    const block = await getLatestBlock()
-    latestBlock.value = block
-    latestBlockError.value = ''
-    latestTxsError.value = ''
-  } catch (err) {
-    latestBlockError.value = (err as Error).message || 'Failed to load latest block.'
-    latestTxsError.value = (err as Error).message || 'Failed to load latest transactions.'
-  }
-
-  try {
-    const blocksList = await getBlocks(10, 0)
-    recentBlocks.value = blocksList
-  } catch (err) {
-    console.warn('Failed to load blocks for chart:', err)
-  }
-
-  loading.value = false
+  await Promise.all([
+    networkStore.fetchNetworkData(),
+    blockStore.fetchLatestBlock(),
+    blockStore.fetchBlocksPage(10, 0)
+  ])
 }
 
 onMounted(() => {
@@ -69,13 +57,13 @@ onUnmounted(() => {
     <main class="container">
       <div class="dashboard-grid">
         <!-- Panel 1: Latest Block -->
-        <section class="panel" id="latest-block-panel" aria-label="Latest Block Details">
-          <div class="panel-header">
-            <h2 class="panel-title">
+        <Card id="latest-block-panel" aria-label="Latest Block Details">
+          <CardHeader>
+            <CardTitle>
               <span class="panel-icon">📦</span> Latest Block
-            </h2>
-          </div>
-          <div class="panel-body">
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             <div v-if="loading && !latestBlock" class="skeleton-wrapper">
               <div class="skeleton-row"></div>
               <div class="skeleton-row"></div>
@@ -111,17 +99,17 @@ onUnmounted(() => {
                 <span class="detail-value">{{ numFmt(latestBlock.nonce) }}</span>
               </div>
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
         <!-- Panel 2: Latest Transactions -->
-        <section class="panel" id="latest-txs-panel" aria-label="Latest Transactions">
-          <div class="panel-header">
-            <h2 class="panel-title">
+        <Card id="latest-txs-panel" aria-label="Latest Transactions">
+          <CardHeader>
+            <CardTitle>
               <span class="panel-icon">⚡</span> Latest Transactions
-            </h2>
-          </div>
-          <div class="panel-body">
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             <div v-if="loading && !latestBlock" class="skeleton-wrapper">
               <div class="skeleton-row"></div>
               <div class="skeleton-row"></div>
@@ -151,64 +139,66 @@ onUnmounted(() => {
                     →
                     <NuxtLink :to="`/address/${tx.recipient}`">{{ shortHash(tx.recipient) }}</NuxtLink>
                   </span>
-                  <span class="amount-badge">{{ microAruToAru(tx.amount) }} ARU</span>
+                  <Badge variant="default" class="amount-badge">{{ microAruToAru(tx.amount) }} ARU</Badge>
                 </NuxtLink>
               </div>
             </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       </div>
 
       <!-- Network Status Card Grid -->
-      <section class="panel spacing-top" id="network-status-panel" aria-label="Network Status">
-        <div class="panel-header">
-          <h2 class="panel-title">
+      <Card class="spacing-top" id="network-status-panel" aria-label="Network Status">
+        <CardHeader>
+          <CardTitle>
             <span class="panel-icon">🌐</span> Network Status
-          </h2>
-        </div>
-        <div class="stats-grid" id="stats-grid" role="region" aria-live="polite">
-          <div class="stat-card">
-            <div class="stat-icon">📦</div>
-            <div :class="['stat-value', { skeleton: !stats }]">
-              {{ stats ? numFmt(stats.height) : '—' }}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="stats-grid" id="stats-grid" role="region" aria-live="polite">
+            <div class="stat-card">
+              <div class="stat-icon">📦</div>
+              <div :class="['stat-value', { skeleton: !stats }]">
+                {{ stats ? numFmt(stats.height) : '—' }}
+              </div>
+              <div class="stat-label">Block Height</div>
             </div>
-            <div class="stat-label">Block Height</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">⚡</div>
-            <div :class="['stat-value', { skeleton: !stats }]">
-              {{ stats ? numFmt(stats.total_tx_count) : '—' }}
+            <div class="stat-card">
+              <div class="stat-icon">⚡</div>
+              <div :class="['stat-value', { skeleton: !stats }]">
+                {{ stats ? numFmt(stats.total_tx_count) : '—' }}
+              </div>
+              <div class="stat-label">Total Transactions</div>
             </div>
-            <div class="stat-label">Total Transactions</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">⏱</div>
-            <div :class="['stat-value', { skeleton: !stats }]">
-              {{ stats ? timeAgo(stats.last_block_time) : '—' }}
+            <div class="stat-card">
+              <div class="stat-icon">⏱</div>
+              <div :class="['stat-value', { skeleton: !stats }]">
+                {{ stats ? timeAgo(stats.last_block_time) : '—' }}
+              </div>
+              <div class="stat-label">Last Block Time</div>
             </div>
-            <div class="stat-label">Last Block Time</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">👥</div>
-            <div :class="['stat-value', { skeleton: !stats }]">
-              {{ stats?.node ? numFmt(stats.node.peer_count) : '0' }}
+            <div class="stat-card">
+              <div class="stat-icon">👥</div>
+              <div :class="['stat-value', { skeleton: !stats }]">
+                {{ stats?.node ? numFmt(stats.node.peer_count) : '0' }}
+              </div>
+              <div class="stat-label">Connected Peers</div>
             </div>
-            <div class="stat-label">Connected Peers</div>
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       <!-- Charts Section -->
-      <section class="panel spacing-top" id="charts-panel" aria-label="Mining Statistics Charts">
-        <div class="panel-header">
-          <h2 class="panel-title">
+      <Card class="spacing-top" id="charts-panel" aria-label="Mining Statistics Charts">
+        <CardHeader>
+          <CardTitle>
             <span class="panel-icon">📈</span> Difficulty & Transaction History
-          </h2>
-        </div>
-        <div class="charts-container">
+          </CardTitle>
+        </CardHeader>
+        <CardContent class="charts-container">
           <DifficultyChart :blocks="recentBlocks" />
-        </div>
-      </section>
+        </CardContent>
+      </Card>
     </main>
   </div>
 </template>

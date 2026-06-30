@@ -1,3 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 30% 6%;
+    --foreground: 220 30% 95%;
+
+    --card: 225 28% 10%;
+    --card-foreground: 220 30% 95%;
+
+    --popover: 224 26% 13%;
+    --popover-foreground: 220 30% 95%;
+
+    --primary: 258 85% 65%;
+    --primary-foreground: 220 30% 95%;
+
+    --secondary: 195 90% 55%;
+    --secondary-foreground: 222 30% 6%;
+
+    --muted: 220 15% 45%;
+    --muted-foreground: 220 20% 65%;
+
+    --accent: 45 100% 58%;
+    --accent-foreground: 222 30% 6%;
+
+    --destructive: 0 80% 60%;
+    --destructive-foreground: 220 30% 95%;
+
+    --border: 224 26% 17%;
+    --input: 224 26% 17%;
+    --ring: 258 85% 65%;
+
+    --radius: 12px;
+  }
+}
+
 /* ── ARUNA Explorer Design System ──────────────────────────────────────────── */
 /* Dark mode, glassmorphism, premium brand aesthetic                            */
 

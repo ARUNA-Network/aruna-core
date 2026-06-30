@@ -1,27 +1,24 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { onMounted, watch } from 'vue'
 import { useRoute } from '#app'
-import { getAddress } from '~/services/api'
+import { storeToRefs } from 'pinia'
+import { useTxStore } from '~/stores/tx'
 import { numFmt, shortHash, microAruToAru } from '~/utils/format'
-import type { AddressData } from '~/types'
+
+// UI Primitives
+import Card from '~/components/ui/card/Card.vue'
+import CardHeader from '~/components/ui/card/CardHeader.vue'
+import CardTitle from '~/components/ui/card/CardTitle.vue'
+import CardContent from '~/components/ui/card/CardContent.vue'
+import Badge from '~/components/ui/badge/Badge.vue'
 
 const route = useRoute()
-const addressData = ref<AddressData | null>(null)
-const loading = ref(true)
-const errorMsg = ref('')
+const txStore = useTxStore()
+const { addressDetails, loading, addressError: errorMsg } = storeToRefs(txStore)
 
 async function loadAddress() {
-  loading.value = true
-  errorMsg.value = ''
   const address = route.params.address as string
-  try {
-    const data = await getAddress(address, 20, 0)
-    addressData.value = data
-  } catch (err) {
-    errorMsg.value = (err as Error).message || 'Failed to load address details.'
-  } finally {
-    loading.value = false
-  }
+  await txStore.fetchAddressDetails(address, 20, 0)
 }
 
 watch(() => route.params.address, () => {
@@ -48,7 +45,7 @@ onMounted(() => {
       <p class="page-subtitle mono">{{ route.params.address }}</p>
     </div>
 
-    <div v-if="loading" class="skeleton-wrapper">
+    <div v-if="loading && !addressDetails" class="skeleton-wrapper">
       <div class="skeleton-row"></div>
       <div class="skeleton-row"></div>
       <div class="skeleton-row"></div>
@@ -58,13 +55,13 @@ onMounted(() => {
       <p>Failed to load address details</p>
       <span class="error-msg">{{ errorMsg }}</span>
     </div>
-    <div v-else-if="addressData" class="address-details-grid">
+    <div v-else-if="addressDetails" class="address-details-grid">
       <!-- ── Details Panel ── -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2 class="panel-title"><span class="panel-icon">💳</span> Account Metrics</h2>
-        </div>
-        <div class="panel-body">
+      <Card>
+        <CardHeader>
+          <CardTitle><span class="panel-icon">💳</span> Account Metrics</CardTitle>
+        </CardHeader>
+        <CardContent>
           <div class="detail-container">
             <div class="detail-row">
               <span class="detail-label">Address</span>
@@ -72,36 +69,36 @@ onMounted(() => {
             </div>
             <div class="detail-row">
               <span class="detail-label">Balance</span>
-              <span class="detail-value text-glow">{{ microAruToAru(addressData.balance) }} ARU</span>
+              <span class="detail-value text-glow">{{ microAruToAru(addressDetails.balance) }} ARU</span>
             </div>
             <div class="detail-row">
               <span class="detail-label">Nonce</span>
-              <span class="detail-value">{{ numFmt(addressData.nonce) }}</span>
+              <span class="detail-value">{{ numFmt(addressDetails.nonce) }}</span>
             </div>
             <div class="detail-row">
               <span class="detail-label">Last Updated Block</span>
               <span class="detail-value">
-                <NuxtLink :to="`/block/${addressData.updated_at_block}`">#{{ numFmt(addressData.updated_at_block) }}</NuxtLink>
+                <NuxtLink :to="`/block/${addressDetails.updated_at_block}`">#{{ numFmt(addressDetails.updated_at_block) }}</NuxtLink>
               </span>
             </div>
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       <!-- ── Transactions History List ── -->
-      <section class="panel spacing-top">
-        <div class="panel-header">
-          <h2 class="panel-title">
-            <span class="panel-icon">🔄</span> Transaction History ({{ addressData.transactions?.length || 0 }})
-          </h2>
-        </div>
-        <div class="panel-body">
-          <div v-if="!addressData.transactions || addressData.transactions.length === 0" class="empty-state">
+      <Card class="spacing-top">
+        <CardHeader>
+          <CardTitle>
+            <span class="panel-icon">🔄</span> Transaction History ({{ addressDetails.transactions?.length || 0 }})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div v-if="!addressDetails.transactions || addressDetails.transactions.length === 0" class="empty-state">
             No transactions found for this address.
           </div>
           <div v-else class="list-container" role="list">
             <NuxtLink
-              v-for="tx in addressData.transactions"
+              v-for="tx in addressDetails.transactions"
               :key="tx.hash"
               :to="`/transaction/${tx.hash}`"
               class="list-item tx-row"
@@ -118,11 +115,11 @@ onMounted(() => {
                   {{ shortHash(tx.recipient) }}
                 </NuxtLink>
               </span>
-              <span class="amount-badge">{{ microAruToAru(tx.amount) }} ARU</span>
+              <Badge variant="default" class="amount-badge">{{ microAruToAru(tx.amount) }} ARU</Badge>
             </NuxtLink>
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
     </div>
   </main>
 </template>

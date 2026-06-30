@@ -1,37 +1,37 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { getNetwork } from '~/services/api'
+import { onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useNetworkStore } from '~/stores/network'
 
-const network = ref<any>(null)
-const loading = ref(true)
-const errorMsg = ref('')
+// UI Primitives
+import Card from '~/components/ui/card/Card.vue'
+import CardHeader from '~/components/ui/card/CardHeader.vue'
+import CardTitle from '~/components/ui/card/CardTitle.vue'
+import CardContent from '~/components/ui/card/CardContent.vue'
+import Badge from '~/components/ui/badge/Badge.vue'
+import Table from '~/components/ui/table/Table.vue'
+import TableHeader from '~/components/ui/table/TableHeader.vue'
+import TableBody from '~/components/ui/table/TableBody.vue'
+import TableRow from '~/components/ui/table/TableRow.vue'
+import TableHead from '~/components/ui/table/TableHead.vue'
+import TableCell from '~/components/ui/table/TableCell.vue'
 
-async function fetchValidators() {
-  loading.value = true
-  errorMsg.value = ''
-  try {
-    const data = await getNetwork()
-    network.value = data
-  } catch (err) {
-    errorMsg.value = (err as Error).message || 'Failed to load validators.'
-  } finally {
-    loading.value = false
-  }
-}
+const networkStore = useNetworkStore()
+const { network, loading, error: errorMsg } = storeToRefs(networkStore)
 
 onMounted(() => {
-  fetchValidators()
+  networkStore.fetchNetworkData()
 })
 </script>
 
 <template>
   <main class="container page-spacing">
-    <section class="panel">
-      <div class="panel-header">
-        <h1 class="panel-title"><span class="panel-icon">⛓</span> Active Validator Nodes</h1>
-      </div>
-      <div class="panel-body">
-        <div v-if="loading" class="skeleton-wrapper">
+    <Card>
+      <CardHeader>
+        <CardTitle><span class="panel-icon">⛓</span> Active Validator Nodes</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div v-if="loading && !network" class="skeleton-wrapper">
           <div class="skeleton-row"></div>
           <div class="skeleton-row"></div>
         </div>
@@ -41,31 +41,31 @@ onMounted(() => {
           <span class="error-msg">{{ errorMsg }}</span>
         </div>
         <div v-else>
-          <table class="grid-table">
-            <thead>
-              <tr>
-                <th>Validator</th>
-                <th>Reward Address</th>
-                <th>Stake Weight</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="mono">#1 (Local Node)</td>
-                <td class="mono">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Validator</TableHead>
+                <TableHead>Reward Address</TableHead>
+                <TableHead>Stake Weight</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell class="mono">#1 (Local Node)</TableCell>
+                <TableCell class="mono">
                   <NuxtLink :to="`/address/${network?.validators?.reward_address || 'sum1faucetaddressxxxxxxxxxxxxxxxxxxxxxxxxxx'}`">
                     {{ network?.validators?.reward_address || 'sum1faucetaddressxxxxxxxxxxxxxxxxxxxxxxxxxx' }}
                   </NuxtLink>
-                </td>
-                <td>10,000 ARU (Min Stake)</td>
-                <td><span class="health-active">Active Validator</span></td>
-              </tr>
-            </tbody>
-          </table>
+                </TableCell>
+                <TableCell>10,000 ARU (Min Stake)</TableCell>
+                <TableCell><Badge variant="success">Active Validator</Badge></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   </main>
 </template>
 

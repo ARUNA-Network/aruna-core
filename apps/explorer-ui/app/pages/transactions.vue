@@ -1,41 +1,32 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { getLatestBlock } from '~/services/api'
+import { onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useBlockStore } from '~/stores/block'
 import { shortHash, microAruToAru } from '~/utils/format'
-import type { Block, Transaction } from '~/types'
 import SearchBar from '~/components/common/SearchBar.vue'
 
-const latestBlock = ref<Block | null>(null)
-const txs = ref<Transaction[]>([])
-const loading = ref(true)
-const errorMsg = ref('')
+// UI Primitives
+import Card from '~/components/ui/card/Card.vue'
+import CardHeader from '~/components/ui/card/CardHeader.vue'
+import CardTitle from '~/components/ui/card/CardTitle.vue'
+import CardContent from '~/components/ui/card/CardContent.vue'
+import Badge from '~/components/ui/badge/Badge.vue'
 
-async function fetchLatestTransactions() {
-  loading.value = true
-  errorMsg.value = ''
-  try {
-    const block = await getLatestBlock()
-    latestBlock.value = block
-    txs.value = block.transactions || []
-  } catch (err) {
-    errorMsg.value = (err as Error).message || 'Failed to load latest transactions.'
-  } finally {
-    loading.value = false
-  }
-}
+const blockStore = useBlockStore()
+const { latestBlock, loading, latestTxsError: errorMsg } = storeToRefs(blockStore)
 
 onMounted(() => {
-  fetchLatestTransactions()
+  blockStore.fetchLatestBlock()
 })
 </script>
 
 <template>
   <main class="container page-spacing">
-    <section class="panel">
-      <div class="panel-header">
-        <h1 class="panel-title"><span class="panel-icon">⚡</span> Transactions</h1>
-      </div>
-      <div class="panel-body">
+    <Card>
+      <CardHeader>
+        <CardTitle><span class="panel-icon">⚡</span> Transactions</CardTitle>
+      </CardHeader>
+      <CardContent>
         <div class="search-prompt-box">
           <p class="search-prompt-label">Search for a specific transaction by hash:</p>
           <SearchBar placeholder="Enter transaction hash..." />
@@ -43,7 +34,7 @@ onMounted(() => {
 
         <div class="spacing-top">
           <h2 class="section-title">Transactions in Latest Block <span v-if="latestBlock" class="text-glow">#{{ latestBlock.height }}</span></h2>
-          <div v-if="loading" class="skeleton-wrapper">
+          <div v-if="loading && !latestBlock" class="skeleton-wrapper">
             <div class="skeleton-row"></div>
             <div class="skeleton-row"></div>
           </div>
@@ -52,13 +43,13 @@ onMounted(() => {
             <p>Failed to load latest block transactions</p>
             <span class="error-msg">{{ errorMsg }}</span>
           </div>
-          <div v-else>
-            <div v-if="txs.length === 0" class="empty-state">
+          <div v-else-if="latestBlock">
+            <div v-if="!latestBlock.transactions || latestBlock.transactions.length === 0" class="empty-state">
               No transactions in the latest block.
             </div>
             <div v-else class="list-container" role="list">
               <NuxtLink
-                v-for="tx in txs"
+                v-for="tx in latestBlock.transactions"
                 :key="tx.hash"
                 :to="`/transaction/${tx.hash}`"
                 class="list-item tx-row"
@@ -71,13 +62,13 @@ onMounted(() => {
                   →
                   <NuxtLink :to="`/address/${tx.recipient}`">{{ shortHash(tx.recipient) }}</NuxtLink>
                 </span>
-                <span class="amount-badge">{{ microAruToAru(tx.amount) }} ARU</span>
+                <Badge variant="default" class="amount-badge">{{ microAruToAru(tx.amount) }} ARU</Badge>
               </NuxtLink>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   </main>
 </template>
 

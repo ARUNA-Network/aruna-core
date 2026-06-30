@@ -1,31 +1,34 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from '#app'
-import { getBlocks } from '~/services/api'
+import { storeToRefs } from 'pinia'
+import { useBlockStore } from '~/stores/block'
 import { numFmt, timestamp, shortHash } from '~/utils/format'
-import type { Block } from '~/types'
+
+// UI Primitives
+import Card from '~/components/ui/card/Card.vue'
+import CardHeader from '~/components/ui/card/CardHeader.vue'
+import CardTitle from '~/components/ui/card/CardTitle.vue'
+import CardContent from '~/components/ui/card/CardContent.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Table from '~/components/ui/table/Table.vue'
+import TableHeader from '~/components/ui/table/TableHeader.vue'
+import TableBody from '~/components/ui/table/TableBody.vue'
+import TableRow from '~/components/ui/table/TableRow.vue'
+import TableHead from '~/components/ui/table/TableHead.vue'
+import TableCell from '~/components/ui/table/TableCell.vue'
 
 const limit = 20
-const blocks = ref<Block[]>([])
-const loading = ref(true)
-const errorMsg = ref('')
+const blockStore = useBlockStore()
+const { blocksPage: blocks, loading, error: errorMsg } = storeToRefs(blockStore)
+
 const route = useRoute()
 const router = useRouter()
-
 const currentPage = ref(Number(route.query.page) || 1)
 
 async function fetchBlocks() {
-  loading.value = true
-  errorMsg.value = ''
   const offset = (currentPage.value - 1) * limit
-  try {
-    const data = await getBlocks(limit, offset)
-    blocks.value = data
-  } catch (err) {
-    errorMsg.value = (err as Error).message || 'Failed to load blocks list.'
-  } finally {
-    loading.value = false
-  }
+  await blockStore.fetchBlocksPage(limit, offset)
 }
 
 watch(() => route.query.page, (newPage) => {
@@ -44,12 +47,12 @@ function navigateToPage(page: number) {
 
 <template>
   <main class="container page-spacing">
-    <section class="panel">
-      <div class="panel-header">
-        <h1 class="panel-title"><span class="panel-icon">📦</span> Blocks</h1>
-      </div>
-      <div class="panel-body">
-        <div v-if="loading" class="skeleton-wrapper">
+    <Card>
+      <CardHeader>
+        <CardTitle><span class="panel-icon">📦</span> Blocks</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div v-if="loading && blocks.length === 0" class="skeleton-wrapper">
           <div class="skeleton-row"></div>
           <div class="skeleton-row"></div>
           <div class="skeleton-row"></div>
@@ -64,55 +67,55 @@ function navigateToPage(page: number) {
             No blocks found.
           </div>
           <div v-else>
-            <table class="grid-table">
-              <thead>
-                <tr>
-                  <th>Height</th>
-                  <th>Hash</th>
-                  <th>Timestamp</th>
-                  <th>Transactions</th>
-                  <th>Difficulty</th>
-                  <th>Nonce</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="block in blocks" :key="block.hash">
-                  <td>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Height</TableHead>
+                  <TableHead>Hash</TableHead>
+                  <TableHead>Timestamp</TableHead>
+                  <TableHead>Transactions</TableHead>
+                  <TableHead>Difficulty</TableHead>
+                  <TableHead>Nonce</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow v-for="block in blocks" :key="block.hash">
+                  <TableCell>
                     <NuxtLink :to="`/block/${block.height}`">#{{ numFmt(block.height) }}</NuxtLink>
-                  </td>
-                  <td class="mono">
+                  </TableCell>
+                  <TableCell class="mono">
                     <NuxtLink :to="`/block/${block.hash}`">{{ shortHash(block.hash) }}</NuxtLink>
-                  </td>
-                  <td>{{ timestamp(block.timestamp) }}</td>
-                  <td>{{ numFmt(block.tx_count) }}</td>
-                  <td>{{ numFmt(block.difficulty) }}</td>
-                  <td>{{ numFmt(block.nonce) }}</td>
-                </tr>
-              </tbody>
-            </table>
+                  </TableCell>
+                  <TableCell>{{ timestamp(block.timestamp) }}</TableCell>
+                  <TableCell>{{ numFmt(block.tx_count) }}</TableCell>
+                  <TableCell>{{ numFmt(block.difficulty) }}</TableCell>
+                  <TableCell>{{ numFmt(block.nonce) }}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
 
-            <!-- Pagination Buttons -->
+            <!-- Pagination Bar -->
             <div class="pagination-bar">
-              <button
+              <Button
                 :disabled="currentPage <= 1"
                 @click="navigateToPage(currentPage - 1)"
-                class="btn-nav"
+                variant="secondary"
               >
                 ← Previous
-              </button>
+              </Button>
               <span class="page-indicator">Page {{ currentPage }}</span>
-              <button
+              <Button
                 :disabled="blocks.length < limit"
                 @click="navigateToPage(currentPage + 1)"
-                class="btn-nav"
+                variant="secondary"
               >
                 Next →
-              </button>
+              </Button>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   </main>
 </template>
 
@@ -131,27 +134,6 @@ function navigateToPage(page: number) {
   margin-top: var(--sp-lg);
   padding-top: var(--sp-md);
   border-top: 1px solid var(--border);
-}
-
-.btn-nav {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  padding: 8px 16px;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  font-family: inherit;
-  transition: border-color var(--t-fast), background var(--t-fast);
-}
-
-.btn-nav:hover:not(:disabled) {
-  border-color: var(--brand-primary);
-  background: var(--bg-hover);
-}
-
-.btn-nav:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .page-indicator {
