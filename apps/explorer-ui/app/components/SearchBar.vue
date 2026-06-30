@@ -35,7 +35,6 @@ async function handleSearch() {
       errorMsg.value = 'No matches found for search query.'
     }
   } catch (err) {
-    // If not found in API, check if it's purely a numeric block height to guess
     if (/^\d+$/.test(q)) {
       router.push(`/block/${q}`)
     } else {

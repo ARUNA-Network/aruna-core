@@ -8,3 +8,18 @@
     </div>
   </footer>
 </template>
+
+<style scoped>
+.footer {
+  margin-top: var(--sp-2xl);
+  padding: var(--sp-lg) 0;
+  border-top: 1px solid var(--border);
+}
+.footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+</style>
