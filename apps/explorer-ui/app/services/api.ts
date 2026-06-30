@@ -2,12 +2,14 @@ import { useRuntimeConfig } from '#app'
 import type { Block, Transaction, AddressData, Stats, NetworkData, SearchResult } from '../types'
 
 function getApiBase(): string {
+  let base = '';
   try {
     const config = useRuntimeConfig()
-    return config.public.apiBase
+    base = config.public.apiBase
   } catch {
-    return (typeof process !== 'undefined' ? (process.env.API_BASE_URL || process.env.NUXT_PUBLIC_API_BASE) : '') || 'https://api.jojowi.web.id/explorer/v1'
+    base = (typeof process !== 'undefined' ? (process.env.API_BASE_URL || process.env.NUXT_PUBLIC_API_BASE) : '') || 'https://api.jojowi.web.id/explorer/v1'
   }
+  return base.replace(/\/+$/, '')
 }
 
 async function apiFetch<T>(path: string): Promise<T> {

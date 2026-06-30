@@ -312,7 +312,8 @@ export async function search(pool: Pool, q: string): Promise<SearchResult[]> {
 // ── Node RPC Access Layer ───────────────────────────────────────────────────
 
 export async function fetchNodeRpc(nodeUrl: string, pathname: string): Promise<any> {
-  const res = await fetch(`${nodeUrl}${pathname}`);
+  const cleanUrl = nodeUrl.replace(/\/+$/, '');
+  const res = await fetch(`${cleanUrl}${pathname}`);
   if (!res.ok) {
     throw new Error(`Node RPC responded with status ${res.status}`);
   }
