@@ -1,19 +1,18 @@
-# Walkthrough - Explorer API Router Prefix Compatibility
+# Walkthrough - Custom Domain Integration
 
-We have added support for both the `/explorer/v1/` and `/api/v1/` route prefixes in the Cloudflare Worker router. This enables the frontend explorer-ui calling `/explorer/v1/status` to match the routes in the worker and respond correctly.
+We have mapped the custom domain `api.jojowi.web.id` to the Cloudflare Worker inside the `wrangler.toml` file to automate DNS and SSL configuration on Cloudflare.
 
 ---
 
 ## 🛠️ Changes Completed
 
-### 1. Main Entrypoint Router Update
-* **[`index.ts`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/src/index.ts#L48-L76)**:
-  * Expanded route distribution condition checks (`isStatus`, `isBlocks`, `isTransaction`, `isAddress`, `isSearch`, `isNetwork`) to support both `/api/v1` and `/explorer/v1` path prefixes.
-
-### 2. Route Handlers Update
-* **[`blocks.ts`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/src/routes/blocks.ts#L7-L85)**: Added matches for `/explorer/v1/blocks`, `/explorer/v1/block/latest`, and regex support `/(?:api|explorer)/v1/block/` for height and hash endpoints.
-* **[`addresses.ts`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/src/routes/addresses.ts#L7-L7)**: Replaced path matching regex with `/(?:api|explorer)/v1/address/`.
-* **[`transactions.ts`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/src/routes/transactions.ts#L7-L7)**: Replaced path matching regex with `/(?:api|explorer)/v1/transaction/`.
+### 1. wrangler.toml Update
+* **[`wrangler.toml`](file:///home/coleallstar/Public/crypto-project/workers/explorer-api/wrangler.toml#L5-L8)**: Added the `[[routes]]` block to bind the custom domain `api.jojowi.web.id` directly to this worker:
+  ```toml
+  [[routes]]
+  pattern = "api.jojowi.web.id"
+  custom_domain = true
+  ```
 
 ---
 
@@ -30,4 +29,4 @@ Total Upload: 293.12 KiB / gzip: 56.67 KiB
 No bindings found.
 --dry-run: exiting now.
 ```
-The worker bundles build successfully with **0 warnings and 0 errors**.
+The configuration was validated and compiled successfully with **0 warnings and 0 errors**.
