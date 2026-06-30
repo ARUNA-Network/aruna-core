@@ -6,7 +6,7 @@ function getApiBase(): string {
     const config = useRuntimeConfig()
     return config.public.apiBase
   } catch {
-    return (typeof process !== 'undefined' ? (process.env.API_BASE_URL || process.env.NUXT_PUBLIC_API_BASE) : '') || ''
+    return (typeof process !== 'undefined' ? (process.env.API_BASE_URL || process.env.NUXT_PUBLIC_API_BASE) : '') || 'https://api.jojowi.web.id/explorer/v1'
   }
 }
 
