@@ -20,7 +20,7 @@
 # ── Stage 1: builder ─────────────────────────────────────────────────────────
 # Uses the published ODE image as base — guarantees identical toolchain to CI
 # and DevContainer. Override ODE_IMAGE in CI for reproducible builds.
-ARG ODE_IMAGE=ghcr.io/aruna-network/ode:latest
+ARG ODE_IMAGE=aruna-ode:local
 FROM ${ODE_IMAGE} AS builder
 
 WORKDIR /usr/src/aruna
@@ -58,9 +58,9 @@ WORKDIR /app
 COPY --from=builder /usr/src/aruna/target/release/aruna-node /app/aruna-node
 COPY --from=builder /usr/src/aruna/config /app/config
 
-# Expose standard ARUNA Network ports
-EXPOSE 9000  # P2P — must be reachable from the internet
-EXPOSE 8080  # RPC — bind to 127.0.0.1 only in production
+# Expose standard ARUNA Network ports (9000: P2P, 8080: RPC)
+EXPOSE 9000
+EXPOSE 8080
 
 ENTRYPOINT ["/app/aruna-node"]
 CMD ["--p2p-port", "9000", "--rpc-port", "8080"]

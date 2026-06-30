@@ -30,6 +30,10 @@ if [ "$MODE" = "docker" ]; then
         exit 1
     fi
     
+    # Build the local ODE image first so that the Node build can use it locally
+    echo "🔨 Building local ODE base image (aruna-ode:local)..."
+    docker build -f docker/ode/Dockerfile -t aruna-ode:local .
+
     # Trigger docker-compose builds and start daemon services
     if docker compose version &> /dev/null; then
         docker compose up -d --build

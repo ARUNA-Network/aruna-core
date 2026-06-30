@@ -6,7 +6,7 @@ services:
     build:
       context: .
       dockerfile: docker/ode/Dockerfile
-    image: ghcr.io/aruna-network/dev:local
+    image: aruna-ode:local
     container_name: aruna-dev
     volumes:
       - .:/workspace
@@ -132,7 +132,7 @@ services:
     build:
       context: .
       dockerfile: docker/ode/Dockerfile
-    image: ghcr.io/aruna-network/dev:local
+    image: aruna-ode:local
     container_name: aruna-test
     volumes:
       - .:/workspace
